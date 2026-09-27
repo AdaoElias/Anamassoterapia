@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+  TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha || github.sha }}
+
+jobs:
+  quality:
+    name: Lint, tipos, testes e build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: massoterapia
+          POSTGRES_PASSWORD: massoterapia_dev
+          POSTGRES_DB: massoterapia_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U massoterapia"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Preparar extensoes do Postgres (constraint de agenda + pgcrypto)
+        run: |
+          docker exec -i ${{ job.services.postgres.id }} psql -U massoterapia -d massoterapia_test \
+            -c "CREATE EXTENSION IF NOT EXISTS btree_gist;" \
+            -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+
+      - name: Verificar formato
+        run: pnpm run format:check
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Verificar tipos
+        run: pnpm run typecheck
+
+      - name: Testes
+        run: pnpm run test
+        env:
+          NODE_ENV: test
+          TEST_DATABASE_URL: postgresql://massoterapia:massoterapia_dev@localhost:5432/massoterapia_test?schema=public
+          DATABASE_URL: postgresql://massoterapia:massoterapia_dev@localhost:5432/massoterapia_test?schema=public
+          JWT_ACCESS_SECRET: ci-access-secret-com-tamanho-minimo-de-32-chars
+          JWT_REFRESH_SECRET: ci-refresh-secret-com-tamanho-minimo-de-32-chars
+          ANAMNESIS_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000001
+
+      - name: Build
+        run: pnpm run build
+        env:
+          DATABASE_URL: postgresql://massoterapia:massoterapia_dev@localhost:5432/massoterapia_test?schema=public
+          JWT_ACCESS_SECRET: ci-access-secret-com-tamanho-minimo-de-32-chars
+          JWT_REFRESH_SECRET: ci-refresh-secret-com-tamanho-minimo-de-32-chars
+          ANAMNESIS_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000001
