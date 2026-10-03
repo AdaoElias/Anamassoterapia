@@ -253,6 +253,48 @@ sessao. O token vive em memoria e, no F5, o bootstrap tenta um unico
 `/auth/refresh` para reconstruir a sessao a partir do cookie httpOnly.
 
 
+## Cadastros (clinica, salas, terapias, profissionais, clientes)
+
+### Escrita multi-tenant sempre por `clinicId`
+
+Um `update` por `id` so, mesmo com id valido, escreveria no tenant alheio. Toda
+escrita usa `updateMany({ where: { id, clinicId } })` e trata `count === 0` como
+404 -- nunca como sucesso silencioso. A leitura filtra `clinicId` e devolve 404
+para id de outro tenant, e nao 403: negar a existencia vaza menos que confirmar
+que o recurso existe.
+
+### PATCH: ausente nao e vazio
+
+Campo ausente significa "nao mexe" (`undefined`, o Prisma ignora); string vazia
+significa "limpa" (`null`). O helper `limpar` preserva os dois sentidos, e os
+schemas `clearable*` do shared fazem o mesmo na validacao. Sem essa distincao,
+um formulario que envia só os campos alterados apagaria todo o resto.
+
+### Desativacao logica, nao `DELETE`
+
+Nao existe delete fisico de terapia, profissional, cliente ou sala: o `DELETE`
+grava `active: false`. Historico de agenda, prontuario e financeiro aponta para
+essas linhas; remover de verdade quebraria a referencia e a auditoria.
+
+### Profissional sem login nesta etapa
+
+O cadastro de profissional nao cria `User`: `userId` fica nulo e o convite de
+acesso entra depois. Isso desacopla "quem atende" de "quem acessa o painel" e
+evita que o cadastro de RH dependa de e-mail valido.
+
+### Vinculo profissional x terapia e substituido por inteiro
+
+No PATCH, quando `therapyIds` vem, o conjunto antigo e apagado e recriado. A
+alternativa -- diff por item -- aceitaria id de terapia de outro tenant e
+adicionaria uma linha cruzada em vez de recusar. Antes de gravar, a API confere
+que todos os ids pertencem a clinica e responde 400 se algum nao pertencer.
+
+### Slug derivado do nome, uma vez
+
+A terapia ganha `slug` a partir do nome quando o campo nao e enviado. Editar o
+nome depois **nao** reescreve o slug: o slug e a chave estavel de link publico, e
+mudar conforme o nome quebraria links ja divulgados.
+
 ## Verificacao
 
 ### A suite nunca escreve no banco de dev

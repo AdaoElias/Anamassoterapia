@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router';
 
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Badge } from '@/components/ui/badge';
+import { PageHeader, Panel } from '@/components/ui/panel';
 import { apiFetch } from '@/lib/api';
 
 interface HealthPayload {
@@ -12,8 +14,16 @@ interface HealthPayload {
   timestamp: string;
 }
 
+const ATALHOS = [
+  { to: '/terapias', titulo: 'Terapias', descricao: 'Cardapio, duracao e precos.' },
+  { to: '/profissionais', titulo: 'Profissionais', descricao: 'Equipe e terapias habilitadas.' },
+  { to: '/clientes', titulo: 'Clientes', descricao: 'Cadastro e contato.' },
+  { to: '/clinica', titulo: 'Clinica', descricao: 'Perfil da unidade e salas.' },
+];
+
 export function HomePage() {
-  const { estado, sair } = useAuth();
+  const { estado } = useAuth();
+  const perfil = estado.status === 'autenticado' ? estado.perfil : null;
 
   const { data, isPending, isError } = useQuery({
     queryKey: ['health'],
@@ -22,71 +32,46 @@ export function HomePage() {
   });
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-3xl flex-col justify-center gap-8 p-6">
-      <header className="flex items-start justify-between gap-4">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Massoterapia</h1>
-          <p className="text-slate-600">
-            Plataforma de agendamento e gestao para clinicas de massoterapia.
-          </p>
-        </div>
+    <div className="space-y-6">
+      <PageHeader
+        titulo={perfil ? `Ola, ${perfil.name}` : 'Painel'}
+        descricao="Gestao da clinica: cadastros, agenda e prontuario."
+      />
 
-        {estado.status === 'autenticado' ? (
-          <div className="flex shrink-0 items-center gap-3">
-            <div className="text-right">
-              <p className="text-sm font-medium text-slate-900">{estado.perfil.name}</p>
-              <p className="text-xs text-slate-500">
-                {estado.perfil.clinicName} · {estado.perfil.role}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void sair()}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
-            >
-              Sair
-            </button>
-          </div>
-        ) : null}
-      </header>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {ATALHOS.map((atalho) => (
+          <Link
+            key={atalho.to}
+            to={atalho.to}
+            className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-brand-300 hover:bg-brand-50/40"
+          >
+            <p className="text-sm font-semibold text-slate-900">{atalho.titulo}</p>
+            <p className="mt-1 text-xs text-slate-500">{atalho.descricao}</p>
+          </Link>
+        ))}
+      </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <Panel>
         <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
           Estado da API
         </h2>
-
         {isPending ? (
           <p className="mt-3 text-sm text-slate-500">Consultando...</p>
         ) : isError ? (
           <div className="mt-3">
             <Badge tone="danger">Indisponivel</Badge>
-            <p className="mt-2 text-sm text-slate-600">
-              A API nao respondeu. Verifique se o servidor esta rodando em{' '}
-              <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs">
-                pnpm dev:api
-              </code>
-              .
-            </p>
+            <p className="mt-2 text-sm text-slate-600">A API nao respondeu.</p>
           </div>
         ) : (
-          <div className="mt-3 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="success">Online</Badge>
-              <span className="font-mono text-xs text-slate-500">v{data.version}</span>
-            </div>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-slate-600">
-              <dt>Servico</dt>
-              <dd className="font-mono text-xs">{data.service}</dd>
-              <dt>Uptime</dt>
-              <dd>{Math.round(data.uptimeSeconds / 60)} min</dd>
-            </dl>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Badge tone="success">Online</Badge>
+            <span className="font-mono text-xs text-slate-500">v{data.version}</span>
+            <span className="text-xs text-slate-500">
+              uptime {Math.round(data.uptimeSeconds / 60)} min
+            </span>
           </div>
         )}
-      </section>
-
-      <p className="text-xs text-slate-400">
-        Etapa 0 concluida. As telas de cadastro, agenda e prontuario entram a partir da Etapa 3.
-      </p>
-    </main>
+      </Panel>
+    </div>
   );
 }

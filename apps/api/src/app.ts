@@ -25,8 +25,12 @@ import {
 import { env } from './config/env.js';
 import { registrarAutenticacao } from './plugins/auth.js';
 import { authRoutes } from './routes/auth.js';
+import { clientRoutes } from './routes/clients.js';
+import { clinicRoutes } from './routes/clinics.js';
 import { healthRoutes } from './routes/health.js';
+import { professionalRoutes } from './routes/professionals.js';
 import { type ReadyProbe, readyRoutes } from './routes/ready.js';
+import { therapyRoutes } from './routes/therapies.js';
 
 /** Tipo da app: a partir do schema Zod, request/reply/body sao tipados. */
 export type App = FastifyInstance<
@@ -202,6 +206,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<App> {
       tags: [
         { name: 'health', description: 'Verificacao de saude e disponibilidade' },
         { name: 'auth', description: 'Autenticacao e refresh de token' },
+        { name: 'clinic', description: 'Perfil da clinica e salas' },
         { name: 'professionals', description: 'Cadastro de profissionais e terapias' },
         { name: 'clients', description: 'Cadastro de clientes' },
         { name: 'therapies', description: 'Cardapio de terapias' },
@@ -231,5 +236,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<App> {
     prefix: '/auth',
     ...(options.verificarSenha === undefined ? {} : { verificarSenha: options.verificarSenha }),
   });
+  await app.register(clinicRoutes, { prefix: '/clinics' });
+  await app.register(therapyRoutes, { prefix: '/therapies' });
+  await app.register(professionalRoutes, { prefix: '/professionals' });
+  await app.register(clientRoutes, { prefix: '/clients' });
   return app;
 }

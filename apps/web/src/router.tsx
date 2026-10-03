@@ -2,8 +2,13 @@ import type { ReactNode } from 'react';
 import { createBrowserRouter, Navigate, useLocation } from 'react-router';
 
 import { useAuth } from '@/components/auth/AuthProvider';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { ClientesPage } from '@/pages/ClientesPage';
+import { ClinicaPage } from '@/pages/ClinicaPage';
 import { HomePage } from '@/pages/HomePage';
 import { LoginPage } from '@/pages/LoginPage';
+import { ProfissionaisPage } from '@/pages/ProfissionaisPage';
+import { TerapiasPage } from '@/pages/TerapiasPage';
 
 function Splash() {
   return (
@@ -36,9 +41,16 @@ export const router = createBrowserRouter([
     path: '/',
     element: (
       <RotaProtegida>
-        <HomePage />
+        <AppLayout />
       </RotaProtegida>
     ),
+    children: [
+      { index: true, element: <HomePage /> },
+      { path: 'terapias', element: <TerapiasPage /> },
+      { path: 'profissionais', element: <ProfissionaisPage /> },
+      { path: 'clientes', element: <ClientesPage /> },
+      { path: 'clinica', element: <ClinicaPage /> },
+    ],
   },
   { path: '/login', element: <LoginPage /> },
   // O portal publico de agendamento entra na Etapa 4.

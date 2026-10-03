@@ -101,10 +101,10 @@ O `pre-push` roda typecheck e testes. O CI roda o gate completo em cada PR.
 | Etapa | Entrega                                                       | Estado |
 | ----- | ------------------------------------------------------------- | ------ |
 | 0     | Fundacao: monorepo, tooling, CI, banco                       | **OK**  |
-| 1     | Schema Prisma, migrations, seed                               | Proxima |
-| 2     | Autenticacao e papeis (admin / profissional / cliente)        |         |
-| 3     | Cadastros: clinica, profissional, cliente, cardapio de terapias |         |
-| 4     | Agenda, disponibilidade, portal publico do cliente            |         |
+| 1     | Schema Prisma, migrations, seed                               | **OK**  |
+| 2     | Autenticacao e papeis (admin / profissional / cliente)        | **OK**  |
+| 3     | Cadastros: clinica, profissional, cliente, cardapio de terapias | **OK**  |
+| 4     | Agenda, disponibilidade, portal publico do cliente            | Proxima |
 | 5     | Notificacoes: WhatsApp + e-mail com fila                     |         |
 | 6     | Prontuario, anamnese versionada, alertas de contraindicacao   |         |
 | 7     | Financeiro: recebido, a receber, pacotes, relatorios         |         |

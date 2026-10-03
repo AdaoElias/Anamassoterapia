@@ -4,10 +4,10 @@ Registro do que foi feito, pedido por pedido, com a solucao aplicada e como
 foi verificada. Escrito no mesmo padrao do resto do repositorio: sem acentos,
 porque o resto do projeto segue ASCII (ver `docs/arquitetura.md`).
 
-**Data da sessao:** 27 e 28 de setembro de 2026
-**Escopo:** Etapa 1 - fundacao de persistencia, constraints de dominio, readiness,
-criptografia de anamnese e seed demonstrativo
-**Estado:** verificado e sem commit. ultimo commit e `20b2a74` (Etapa 0)
+**Data da sessao:** 3 de outubro de 2026
+**Escopo:** Etapa 3 - cadastros de clinica/salas, terapias, profissionais e
+clientes, na API e no painel web
+**Estado:** verificado e sem commit. ultimo commit e `ad5f2ef` (Etapa 2)
 
 ---
 
@@ -508,4 +508,72 @@ devolvendo 401.
 O teste no navegador (tela de login, escolha de clinica e F5) ainda nao foi
 feito porque o dev server do web nao estava de pe; o contrato da API foi
 verificado direto.
+
+---
+
+## 8. Cadastros (Etapa 3)
+
+Objetivo: CRUD de clinica/salas, terapias, profissionais e clientes na API, com
+as telas de administracao no painel web. O escopo foi confirmado com o usuario:
+API **e** telas; a "clinica" e o perfil da unica clinica atual mais as salas
+(sem onboarding multi-tenant); profissionais so cadastro, sem login.
+
+### 8.1 O que foi entregue
+
+- **Shared** (`packages/shared/src/schemas/`): `clinic.ts`, `room.ts`,
+  `therapy.ts`, `professional.ts`, `client.ts` e `utils/slug.ts`. `common.ts`
+  ganhou os `clearable*` (e-mail, telefone, CPF, CNPJ, CEP), `hexColorSchema`,
+  `booleanQuerySchema` e `pageMetaSchema`.
+- **API**: `src/lib/cadastros.ts` (`limpar`, `dataDeNascimento`, `paraDataISO`,
+  `ehConflitoUnico`, `mensagemConflito`) e as rotas `clinics.ts`, `therapies.ts`,
+  `professionals.ts`, `clients.ts`, registradas em `app.ts` (tag `clinic`).
+  Leitura pede `requireAuth`; escrita pede `requireRole('ADMIN')`.
+- **Web**: primitivos de UI (`button`, `field`, `panel`, `modal`, `badge`),
+  `lib/cadastros.ts` (cliente de dados), `lib/format.ts` e as telas
+  `TerapiasPage`, `ProfissionaisPage`, `ClientesPage`, `ClinicaPage`, sob um
+  `AppLayout` com navegacao; `HomePage` virou painel com atalhos e estado da API.
+
+### 8.2 Decisoes
+
+- **PATCH com ausente x vazio** (detalhado em `docs/arquitetura.md`): `limpar`
+  distingue "nao mexe" de "limpa".
+- **Desativacao logica**: o `DELETE` grava `active: false`.
+- **Terapias do profissional** substituidas por inteiro, com os ids validados
+  contra a clinica (400 `INVALID_THERAPY_IDS`).
+- **Slug da terapia** derivado do nome na criacao e **nao** reescrito ao editar o
+  nome.
+- **Comissao em basis points** no banco; o formulario converte `%` <-> basis
+  points.
+- **Sem react-hook-form/zodResolver no web**: estado local + `useMutation`,
+  seguindo o padrao ja usado no `LoginPage`. Os tipos do payload vem do shared.
+
+### 8.3 Bugs encontrados e corrigidos
+
+- **`z.coerce.boolean()` mente.** `Boolean('false') === true`, entao
+  `?includeInactive=false` ligava o filtro. Trocado por `booleanQuerySchema`
+  (enum `true/false/1/0` + `transform`).
+- **`clinicUpdateSchema` recusava string vazia** em `legalName`, endereco e
+  termos, embora a rota ja usasse `limpar` (que interpreta `''` como limpar).
+  Campos passaram a aceitar `''` (`clearableText`), alinhando schema e rota.
+- **Erro de unicidade sem `instanceof`.** A deteccao passou a ser pelo `code`
+  `P2002` (`ehConflitoUnico`), sem acoplar a versao do client gerado.
+
+### 8.4 Verificacao final
+
+| Item | Resultado |
+| --- | --- |
+| Testes da API | 119/119 (8 arquivos) |
+| Testes novos nesta etapa | 15 (`cadastros.test.ts`) |
+| `pnpm check` (format, lint, typecheck, test, build) | exit 0 |
+| Build do web | 271 modulos, OK |
+
+O smoke test no navegador das telas de cadastro ainda nao foi feito nesta sessao;
+o contrato foi coberto pelos testes de API e o web passou typecheck, lint e
+build.
+
+### 8.5 Pendencia para a proxima etapa
+
+Os profissionais nao tem login; o cadastro preve `userId` nulo. Ao implementar a
+agenda (Etapa 4), revisar se algum fluxo ja precisa do acesso do profissional ao
+proprio painel.
 

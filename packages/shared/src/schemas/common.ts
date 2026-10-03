@@ -104,6 +104,37 @@ export const optionalEmailSchema = z
   .optional()
   .transform((value) => (value === '' ? null : value));
 
+/**
+ * Versoes "limpas" para PATCH.
+ *
+ * Nao transformam ausente em nulo de proposito. Num PATCH, campo ausente
+ * significa "nao mexe" e string vazia significa "limpa". Um `.transform`
+ * que converte `undefined` em `null` apagaria o campo em todo PATCH que nao
+ * o mencionasse. Quem chama decide: ausente fica fora do `data` do Prisma.
+ */
+export const clearableEmailSchema = z.union([z.literal(''), emailSchema]);
+export const clearablePhoneSchema = z.union([z.literal(''), phoneSchema]);
+export const clearableCpfSchema = z.union([z.literal(''), cpfSchema]);
+export const clearableCnpjSchema = z.union([z.literal(''), cnpjSchema]);
+export const clearableCepSchema = z.union([z.literal(''), cepSchema]);
+
+/** Cor hexadecimal `#RRGGBB`, o formato aceito por `<input type="color">`. */
+export const hexColorSchema = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{6}$/, 'Cor deve estar no formato #RRGGBB');
+
+/**
+ * Booleano vindo de query string.
+ *
+ * `z.coerce.boolean()` seria `Boolean(valor)`, e `Boolean('false')` e `true`:
+ * `?includeInactive=false` ligaria o filtro. Aqui a string e interpretada
+ * explicitamente.
+ */
+export const booleanQuerySchema = z
+  .enum(['true', 'false', '1', '0'])
+  .default('false')
+  .transform((value) => value === 'true' || value === '1');
+
 /** Busca livre: normalizada para comparacao sem acento e sem caixa. */
 export const searchSchema = z
   .string()
@@ -116,6 +147,16 @@ export const idSchema = z.string().uuid('Identificador invalido');
 export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   perPage: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+/** Metadados de paginacao, no mesmo formato que `buildPageMeta` devolve. */
+export const pageMetaSchema = z.object({
+  page: z.number().int(),
+  perPage: z.number().int(),
+  total: z.number().int(),
+  totalPages: z.number().int(),
+  hasNextPage: z.boolean(),
+  hasPreviousPage: z.boolean(),
 });
 
 export type Pagination = z.infer<typeof paginationSchema>;
