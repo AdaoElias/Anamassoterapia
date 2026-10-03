@@ -1,0 +1,1063 @@
+// ===================================================================
+// Massoterapia - modelo de dados
+// ===================================================================
+// Convencoes:
+//  - Tabela e coluna em snake_case (@@map / @map). O SQL manual das
+//    constraints, das consultas de relatorio e do indice parcial fica
+//    legivel sem aspas em todo lugar.
+//  - Campo TypeScript em camelCase. A traducao esta sempre no campo.
+//  - Todo dado de negocio tem clinicId. Multi-tenant desde o dia zero.
+//  - Dinheiro em centavos, Int. Nunca float.
+//  - Horario de agenda em timestamptz (startAt/endAt), sempre guardado
+//    em UTC. O fuso e da clinica e aplicado na borda (disponibilidade).
+//  - Disponibilidade recorrente em minutos a partir da meia-noite
+//    (startMinute/endMinute), e nao em "HH:MM": elimina timezone da
+//    representacao e deixa o calculo de slots trivial.
+// ===================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// -------------------------------------------------------------------
+// Enums
+// Os enums de dominio espelham `packages/shared/src/domain`. Ao alterar
+// um valor aqui, altere tambem no pacote compartilhado.
+// -------------------------------------------------------------------
+
+/// Papeis de acesso. A ordem de declaracao nao implica hierarquia.
+enum Role {
+  ADMIN
+  PROFISSIONAL
+  CLIENTE
+}
+
+enum AppointmentStatus {
+  AGENDADO_PENDENTE
+  CONFIRMADO
+  EM_ATENDIMENTO
+  CONCLUIDO
+  CANCELADO
+  NO_SHOW
+}
+
+enum AppointmentSource {
+  PORTAL_CLIENTE
+  ADMIN
+  PROFISSIONAL
+  IMPORTADO
+}
+
+enum CancellationReason {
+  CLIENTE_DESISTIU
+  CLIENTE_REAGENDOU
+  FALTA_DO_PROFISSIONAL
+  CONDICAO_CLINICA
+  FORCA_MAIOR
+  NAO_INFORMADO
+}
+
+enum PaymentMethod {
+  PIX
+  DINHEIRO
+  CARTAO_DEBITO
+  CARTAO_CREDITO
+  BOLETO
+  TRANSFERENCIA
+  ASSINATURA
+  PACOTE
+  OUTRO
+}
+
+enum FinancialEntryStatus {
+  PENDENTE
+  PAGO
+  CANCELADO
+  INADIMPENTE
+}
+
+enum FinancialEntryKind {
+  RECEITA
+  DESPESA
+  COMISSAO
+}
+
+enum AvailabilityExceptionType {
+  /// Folga, vacations, feriado, reuniao: nao ha agendamento possivel.
+  BLOQUEIO
+  /// Janela extra de trabalho alem do horario recorrente.
+  EXTRA
+}
+
+enum AnamnesisStatus {
+  RASCUNHO
+  ENVIADA
+  APROVADA
+  REJEITADA
+  EXPIRADA
+}
+
+enum AlertSeverity {
+  BAIXA
+  MEDIA
+  ALTA
+}
+
+enum AlertDecision {
+  PENDENTE
+  ACEITO
+  BLOQUEADO
+}
+
+enum PackageStatus {
+  ATIVO
+  CONCLUIDO
+  CANCELADO
+  EXPIRADO
+}
+
+enum PackageSessionStatus {
+  DISPONIVEL
+  UTILIZADA
+  CANCELADA
+  EXPIRADA
+}
+
+enum CommissionStatus {
+  PREVISTA
+  APROVADA
+  PAGA
+  CANCELADA
+}
+
+enum NotificationChannel {
+  WHATSAPP
+  EMAIL
+  SMS
+}
+
+enum NotificationType {
+  CONFIRMACAO_AGENDAMENTO
+  LEMBRETE
+  LEMBRETE_ANAMNESE
+  ANAMNESE_PENDENTE
+  CANCELAMENTO
+  REAGENDAMENTO
+  PAGAMENTO_PENDENTE
+  PAGAMENTO_RECEBIDO
+  NOVO_AGENDAMENTO
+  ALERTA_CONTRAINDICACAO
+}
+
+enum NotificationStatus {
+  PENDENTE
+  ENVIANDO
+  ENVIADO
+  ERRO
+  CANCELADO
+}
+
+// ===================================================================
+// Identidade e tenant
+// ===================================================================
+
+/// Tenant raiz. Uma linha por clinica.
+model Clinic {
+  id        String  @id @default(uuid()) @db.Uuid
+  slug      String  @unique @db.VarChar(60)
+  name      String  @db.VarChar(120)
+  legalName String? @map("legal_name") @db.VarChar(160)
+  cnpj      String? @db.VarChar(14)
+
+  email    String? @db.VarChar(254)
+  phone    String? @db.VarChar(20)
+  /// IANA. Ex.: "America/Sao_Paulo". Toda conversao de horario usa esta.
+  timezone String  @default("America/Sao_Paulo") @db.VarChar(64)
+
+  addressLine1 String? @map("address_line1") @db.VarChar(160)
+  addressLine2 String? @map("address_line2") @db.VarChar(160)
+  addressCity  String? @map("address_city") @db.VarChar(80)
+  addressState String? @map("address_state") @db.Char(2)
+  addressZip   String? @map("address_zip") @db.VarChar(9)
+
+  /// Documento exibido no link publico de agendamento. Avaliada a cada requisicao.
+  /// String no Prisma vira `text` no Postgres: nao ha limite de tamanho.
+  bookingTerms String?  @map("booking_terms")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  memberships               ClinicMembership[]
+  professionals             Professional[]
+  clients                   Client[]
+  therapies                 Therapy[]
+  therapyProfessionals      TherapyProfessional[]
+  rooms                     Room[]
+  availabilityRules         AvailabilityRule[]
+  availabilityBlocks        AvailabilityException[]
+  holidays                  ClinicHoliday[]
+  appointments              Appointment[]
+  appointmentHistory        AppointmentStatusHistory[]
+  anamnesisTemplates        AnamnesisTemplate[]
+  therapyAnamnesisTemplates TherapyAnamnesisTemplate[]
+  anamneses                 Anamnesis[]
+  appointmentAnamneses      AppointmentAnamnesis[]
+  contraindications         Contraindication[]
+  therapyContraindications  TherapyContraindication[]
+  clientConditions          ClientContraindication[]
+  contraindicationAlerts    ContraindicationAlert[]
+  packages                  Package[]
+  packageSessions           PackageSession[]
+  financialEntries          FinancialEntry[]
+  commissions               Commission[]
+  notifications             Notification[]
+  auditLogs                 AuditLog[]
+
+  @@index([active])
+  @@map("clinics")
+}
+
+/// Identidade global de login. Nao carrega papel: o papel e por clinica.
+model User {
+  id              String    @id @default(uuid()) @db.Uuid
+  email           String    @unique @db.VarChar(254)
+  passwordHash    String    @map("password_hash") @db.VarChar(255)
+  name            String    @db.VarChar(120)
+  phone           String?   @db.VarChar(20)
+  /// Bitmap de flags de LGPD: 1=marketing, 2=comunicacoes WhatsApp.
+  consentFlags    Int       @default(0) @map("consent_flags")
+  active          Boolean   @default(true)
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz(6)
+  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz(6)
+  /// Invalida sessoes em massa (logout global, troca de senha).
+  tokenEpoch      Int       @default(0) @map("token_epoch")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  memberships             ClinicMembership[]
+  professionalOf          Professional[]
+  clientOf                Client[]
+  refreshTokens           RefreshToken[]
+  passwordResetTokens     PasswordResetToken[]
+  auditLogs               AuditLog[]
+  createdAppointments     Appointment[]              @relation("AppointmentCreatedBy")
+  changedStatuses         AppointmentStatusHistory[]
+  reviewedAnamneses       Anamnesis[]
+  acknowledgedAlerts      ContraindicationAlert[]    @relation("AlertAcknowledgedBy")
+  createdConditions       ClientContraindication[]
+  createdFinancialEntries FinancialEntry[]
+  createdPackages         Package[]
+  cancelledAppointments   Appointment[]              @relation("AppointmentCancelledBy")
+
+  @@map("users")
+}
+
+/// Papeis de um usuario dentro de uma clinica. Unica fonte de verdade
+/// para RBAC: nem Professional nem Client concedem acesso.
+model ClinicMembership {
+  id        String   @id @default(uuid()) @db.Uuid
+  clinicId  String   @map("clinic_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      Role
+  /// Funcao operacional (ex.: "Recepcao"). Livre, nao controla acesso.
+  jobTitle  String?  @map("job_title") @db.VarChar(80)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Sessoes abertas com esta membership como contexto. `onDelete: Cascade`
+  /// faz o token de quem foi removido da clinica morrer junto, em vez de
+  /// virar credencial valida sem destino.
+  refreshTokens RefreshToken[]
+
+  @@unique([clinicId, userId, role])
+  @@index([userId])
+  @@map("clinic_memberships")
+}
+
+/// Refresh token com rotacao. So o hash e guardado: vazamento do banco
+/// nao permite forjar sessao.
+model RefreshToken {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  tokenHash    String    @unique @map("token_hash") @db.VarChar(128)
+  /// Agrupa a cadeia de rotacao. Revogar a familia inteira encerra areuse.
+  familyId     String    @map("family_id") @db.Uuid
+  /// Clinica e papel que este token representa. Sem isso o refresh nao
+  /// reconstitui a sessao quando o usuario trabalha em mais de uma clinica:
+  /// o access token antigo ja expirou e nao vem no refresh.
+  /// Nulo em tokens emitidos antes da coluna; o refresh cai para a
+  /// unica membership do usuario nesses casos.
+  membershipId String?   @map("membership_id") @db.Uuid
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(6)
+  replacedById String?   @unique @map("replaced_by_id") @db.Uuid
+  userAgent    String?   @map("user_agent") @db.VarChar(300)
+  ip           String?   @db.VarChar(45)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membership ClinicMembership? @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  replacedBy RefreshToken?  @relation("TokenRotation", fields: [replacedById], references: [id])
+  replaced   RefreshToken[] @relation("TokenRotation")
+
+  @@index([userId, familyId])
+  @@index([membershipId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.VarChar(128)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+// ===================================================================
+// Pessoas
+// ===================================================================
+
+model Professional {
+  id                           String   @id @default(uuid()) @db.Uuid
+  clinicId                     String   @map("clinic_id") @db.Uuid
+  /// Nulo enquanto o profissional ainda nao criou acesso ao painel.
+  userId                       String?  @map("user_id") @db.Uuid
+  name                         String   @db.VarChar(120)
+  email                        String?  @db.VarChar(254)
+  phone                        String?  @db.VarChar(20)
+  /// Registro profissional (CREFITO, CREFON, etc). Obrigatorio para
+  /// emitir a responsavel tecnica da sessao no prontuario.
+  registrationNumber           String?  @map("registration_number") @db.VarChar(40)
+  registrationType             String?  @map("registration_type") @db.VarChar(20)
+  bio                          String?  @db.VarChar(600)
+  /// Cor do calendario, hexadecimal. Vem do cadastro deAppointment.
+  color                        String?  @db.VarChar(7)
+  /// Nome normalizado para busca, sem acento e sem caixa.
+  searchText                   String?  @map("search_text") @db.VarChar(180)
+  /// Percentual de comissao padrao, em basis points (1000 = 10%).
+  defaultCommissionBasisPoints Int      @default(0) @map("default_commission_basis_points")
+  active                       Boolean  @default(true)
+  createdAt                    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic                 Clinic                  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  user                   User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  therapies              TherapyProfessional[]
+  availabilityRules      AvailabilityRule[]
+  availabilityExceptions AvailabilityException[]
+  appointments           Appointment[]
+  commissions            Commission[]
+
+  @@unique([clinicId, userId])
+  @@unique([clinicId, registrationNumber])
+  @@index([clinicId, active])
+  @@index([clinicId, searchText])
+  @@map("professionals")
+}
+
+model Client {
+  id             String    @id @default(uuid()) @db.Uuid
+  clinicId       String    @map("clinic_id") @db.Uuid
+  /// Nulo para cliente cadastrado pela recepcao que ainda nao fez login.
+  userId         String?   @map("user_id") @db.Uuid
+  name           String    @db.VarChar(120)
+  email          String?   @db.VarChar(254)
+  phone          String?   @db.VarChar(20)
+  /// Somente digitos. Persistir formatado quebra busca e comparacao.
+  cpf            String?   @db.VarChar(11)
+  birthDate      DateTime? @map("birth_date") @db.Date
+  /// Genero, texto livre. Anamnese estruturada vive em Anamnesis.
+  gender         String?   @db.VarChar(40)
+  addressLine1   String?   @map("address_line1") @db.VarChar(160)
+  addressCity    String?   @map("address_city") @db.VarChar(80)
+  addressState   String?   @map("address_state") @db.Char(2)
+  addressZip     String?   @map("address_zip") @db.VarChar(9)
+  notes          String?   @db.VarChar(1000)
+  searchText     String?   @map("search_text") @db.VarChar(180)
+  marketingOptIn Boolean   @default(false) @map("marketing_opt_in")
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic           Clinic                   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  user             User?                    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  appointments     Appointment[]
+  anamneses        Anamnesis[]
+  conditions       ClientContraindication[]
+  packages         Package[]
+  financialEntries FinancialEntry[]
+  notifications    Notification[]
+
+  @@unique([clinicId, userId])
+  @@unique([clinicId, cpf])
+  @@index([clinicId, active])
+  @@index([clinicId, searchText])
+  @@index([clinicId, phone])
+  @@index([clinicId, email])
+  @@map("clients")
+}
+
+// ===================================================================
+// Cardapio de terapias
+// ===================================================================
+
+model Therapy {
+  id                       String   @id @default(uuid()) @db.Uuid
+  clinicId                 String   @map("clinic_id") @db.Uuid
+  name                     String   @db.VarChar(120)
+  slug                     String   @db.VarChar(60)
+  description              String?  @db.VarChar(1200)
+  category                 String?  @db.VarChar(60)
+  durationMinutes          Int      @default(60) @map("duration_minutes")
+  /// Folga apos a sessao (higienizacao, organizacao). Nao bloqueia o
+  /// profissional no cliente: entra no calculo do proximo horario livre.
+  bufferMinutes            Int      @default(0) @map("buffer_minutes")
+  priceCents               Int      @map("price_cents")
+  color                    String?  @db.VarChar(7)
+  imageUrl                 String?  @map("image_url") @db.VarChar(300)
+  /// Anamnese obrigatoria: sem Anamnesis aprovada, nao agenda.
+  requiresAnamnesis        Boolean  @default(true) @map("requires_anamnesis")
+  /// Exige atestado medico, independente da anamnese.
+  requiresMedicalClearance Boolean  @default(false) @map("requires_medical_clearance")
+  /// Avise antes do atendimento (ex.: 24h). 0 desliga.
+  minNoticeMinutes         Int      @default(0) @map("min_notice_minutes")
+  /// Faixa etaria aceita, em anos. Nulo = sem restricao.
+  minAge                   Int?     @map("min_age")
+  maxAge                   Int?     @map("max_age")
+  position                 Int      @default(0)
+  active                   Boolean  @default(true)
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic             Clinic                     @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  professionals      TherapyProfessional[]
+  appointments       Appointment[]
+  anamnesisTemplates TherapyAnamnesisTemplate[]
+  contraindications  TherapyContraindication[]
+
+  @@unique([clinicId, slug])
+  @@index([clinicId, active, position])
+  @@map("therapies")
+}
+
+/// Vinculo profissional <-> terapia, com preco e duracao proprios.
+model TherapyProfessional {
+  id                    String   @id @default(uuid()) @db.Uuid
+  clinicId              String   @map("clinic_id") @db.Uuid
+  therapyId             String   @map("therapy_id") @db.Uuid
+  professionalId        String   @map("professional_id") @db.Uuid
+  /// Sobrescrevem a terapia quando definidos. Padrao: usa a terapia.
+  customDurationMinutes Int?     @map("custom_duration_minutes")
+  customPriceCents      Int?     @map("custom_price_cents")
+  customBufferMinutes   Int?     @map("custom_buffer_minutes")
+  active                Boolean  @default(true)
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic       Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  therapy      Therapy      @relation(fields: [therapyId], references: [id], onDelete: Cascade)
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@unique([therapyId, professionalId])
+  @@index([professionalId])
+  @@map("therapy_professionals")
+}
+
+model Room {
+  id        String   @id @default(uuid()) @db.Uuid
+  clinicId  String   @map("clinic_id") @db.Uuid
+  name      String   @db.VarChar(80)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic       Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@unique([clinicId, name])
+  @@index([clinicId, active])
+  @@map("rooms")
+}
+
+// ===================================================================
+// Disponibilidade
+// ===================================================================
+
+/// Horario recorrente semanal. `weekday` 0=domingo .. 6=sabado.
+/// `startMinute`/`endMinute`: minutos desde a meia-noite no fuso da clinica.
+model AvailabilityRule {
+  id                     String    @id @default(uuid()) @db.Uuid
+  clinicId               String    @map("clinic_id") @db.Uuid
+  professionalId         String    @map("professional_id") @db.Uuid
+  weekday                Int
+  startMinute            Int       @map("start_minute")
+  endMinute              Int       @map("end_minute")
+  slotGranularityMinutes Int       @default(15) @map("slot_granularity_minutes")
+  /// Vigencia. `effectiveFrom` obrigatorio: regra retroativa e erro de agendamento.
+  effectiveFrom          DateTime  @map("effective_from") @db.Date
+  effectiveTo            DateTime? @map("effective_to") @db.Date
+  active                 Boolean   @default(true)
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic       Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, professionalId, weekday, effectiveFrom])
+  @@map("availability_rules")
+}
+
+/// Excecao pontual: folga, feriado, reuniao ou janela extra.
+model AvailabilityException {
+  id             String                    @id @default(uuid()) @db.Uuid
+  clinicId       String                    @map("clinic_id") @db.Uuid
+  professionalId String                    @map("professional_id") @db.Uuid
+  date           DateTime                  @db.Date
+  type           AvailabilityExceptionType
+  /// Nulos = o dia inteiro. Em EXTRA, sao a janela extra de trabalho.
+  startMinute    Int?                      @map("start_minute")
+  endMinute      Int?                      @map("end_minute")
+  reason         String?                   @db.VarChar(200)
+  active         Boolean                   @default(true)
+  createdAt      DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic       Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@unique([professionalId, date, type, startMinute])
+  @@index([clinicId, date])
+  @@map("availability_exceptions")
+}
+
+/// Dia sem atendimento na clinica. Fora disso a regra se aplica normal.
+model ClinicHoliday {
+  id          String   @id @default(uuid()) @db.Uuid
+  clinicId    String   @map("clinic_id") @db.Uuid
+  date        DateTime @db.Date
+  description String?  @db.VarChar(120)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, date])
+  @@map("clinic_holidays")
+}
+
+// ===================================================================
+// Agenda
+// ===================================================================
+
+/// Sessao agendada. O conflito de horario e garantido no banco por
+/// constraint de exclusao (migration `constraints`), nao na aplicacao.
+model Appointment {
+  id             String  @id @default(uuid()) @db.Uuid
+  clinicId       String  @map("clinic_id") @db.Uuid
+  clientId       String  @map("client_id") @db.Uuid
+  professionalId String  @map("professional_id") @db.Uuid
+  therapyId      String  @map("therapy_id") @db.Uuid
+  roomId         String? @map("room_id") @db.Uuid
+
+  /// Instantes em UTC. O fuso da clinica so aparece na apresentacao.
+  startAt DateTime @map("start_at") @db.Timestamptz(6)
+  endAt   DateTime @map("end_at") @db.Timestamptz(6)
+
+  status AppointmentStatus @default(AGENDADO_PENDENTE)
+  source AppointmentSource @default(PORTAL_CLIENTE)
+
+  /// Preco congelado no ato. Mudar o valor da terapia nao reescreve o passado.
+  priceCents Int @map("price_cents")
+
+  /// Texto do cliente, visivel a equipe. Nao substitui a anamnese.
+  notes        String? @db.VarChar(1000)
+  /// Registro do profissional sobre a sessao realizada.
+  sessionNotes String? @map("session_notes") @db.VarChar(2000)
+
+  cancellationReason CancellationReason? @map("cancellation_reason")
+  cancelledAt        DateTime?           @map("cancelled_at") @db.Timestamptz(6)
+  cancelledByUserId  String?             @map("cancelled_by_user_id") @db.Uuid
+  confirmedAt        DateTime?           @map("confirmed_at") @db.Timestamptz(6)
+  startedAt          DateTime?           @map("started_at") @db.Timestamptz(6)
+  finishedAt         DateTime?           @map("finished_at") @db.Timestamptz(6)
+
+  /// Chave de idempotencia do agendamento publico: clicar duas vezes
+  /// no botao cria uma sessao so.
+  idempotencyKey  String? @map("idempotency_key") @db.VarChar(80)
+  createdByUserId String? @map("created_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic       Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  client       Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  therapy      Therapy      @relation(fields: [therapyId], references: [id], onDelete: Restrict)
+  room         Room?        @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  createdBy    User?        @relation("AppointmentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  cancelledBy  User?        @relation("AppointmentCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+
+  statusHistory     AppointmentStatusHistory[]
+  anamnesisUsed     AppointmentAnamnesis[]
+  contraindications ContraindicationAlert[]
+  financialEntries  FinancialEntry[]
+  commissions       Commission[]
+  packageSessions   PackageSession[]
+  notifications     Notification[]
+
+  @@unique([clinicId, idempotencyKey])
+  @@index([clinicId, startAt])
+  @@index([professionalId, startAt])
+  @@index([clientId, startAt])
+  @@index([clinicId, status, startAt])
+  @@index([roomId, startAt])
+  @@map("appointments")
+}
+
+/// Trilha de status. Append-only: e a prova de quando a sessao mudou
+/// de estado e por quem, inclusive para contestacao de horario.
+model AppointmentStatusHistory {
+  id              String             @id @default(uuid()) @db.Uuid
+  clinicId        String             @map("clinic_id") @db.Uuid
+  appointmentId   String             @map("appointment_id") @db.Uuid
+  fromStatus      AppointmentStatus? @map("from_status")
+  toStatus        AppointmentStatus  @map("to_status")
+  reason          String?            @db.VarChar(300)
+  changedByUserId String?            @map("changed_by_user_id") @db.Uuid
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  clinic      Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  changedBy   User?       @relation(fields: [changedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([appointmentId, createdAt])
+  @@map("appointment_status_history")
+}
+
+// ===================================================================
+// Anamnese e contraindicacoes
+// ===================================================================
+
+/// Formulario de anamnese. Um template por terapia, com um template
+/// padrao da clinica para as demais. `schema` e JSON Schema do form.
+model AnamnesisTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  clinicId    String   @map("clinic_id") @db.Uuid
+  name        String   @db.VarChar(120)
+  description String?  @db.VarChar(600)
+  version     Int      @default(1)
+  schema      Json
+  /// Aplicado quando a terapia nao tem template proprio.
+  isDefault   Boolean  @default(false) @map("is_default")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic    Clinic                     @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  therapies TherapyAnamnesisTemplate[]
+  anamneses Anamnesis[]
+
+  @@unique([clinicId, name, version])
+  @@index([clinicId, isActive])
+  @@map("anamnesis_templates")
+}
+
+model TherapyAnamnesisTemplate {
+  id         String   @id @default(uuid()) @db.Uuid
+  clinicId   String   @map("clinic_id") @db.Uuid
+  therapyId  String   @map("therapy_id") @db.Uuid
+  templateId String   @map("template_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  clinic   Clinic            @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  therapy  Therapy           @relation(fields: [therapyId], references: [id], onDelete: Cascade)
+  template AnamnesisTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([therapyId, templateId])
+  @@map("therapy_anamnesis_templates")
+}
+
+/// Resposta de anamnese, imutavel e versionada por cliente.
+/// `answersEncrypted`: AES-256-GCM em base64 (iv:tag:ciphertext).
+/// A migration `constraints` bloqueia UPDATE quando o status sai de RASCUNHO.
+model Anamnesis {
+  id         String          @id @default(uuid()) @db.Uuid
+  clinicId   String          @map("clinic_id") @db.Uuid
+  clientId   String          @map("client_id") @db.Uuid
+  templateId String?         @map("template_id") @db.Uuid
+  version    Int
+  status     AnamnesisStatus @default(RASCUNHO)
+
+  answersEncrypted String?   @map("answers_encrypted") @db.Text
+  /// SHA-256 do texto cifrado. Detecta alteracao sem descriptografar.
+  contentHash      String?   @map("content_hash") @db.Char(64)
+  /// Atestado/autorizacao assinada pelo cliente no portal.
+  signedAt         DateTime? @map("signed_at") @db.Timestamptz(6)
+  submittedAt      DateTime? @map("submitted_at") @db.Timestamptz(6)
+
+  reviewedByUserId String?   @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt       DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  reviewNotes      String?   @map("review_notes") @db.VarChar(1000)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  clinic     Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  client     Client                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  template   AnamnesisTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  reviewedBy User?                  @relation(fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  usedIn     AppointmentAnamnesis[]
+
+  @@unique([clinicId, clientId, version])
+  @@index([clinicId, status])
+  @@index([clientId, version])
+  @@map("anamneses")
+}
+
+/// Qual versao da anamnese foi usada na sessao. Congela a prova:
+/// o profissional leu a versao 2 mesmo que hoje exista a 4.
+model AppointmentAnamnesis {
+  id            String   @id @default(uuid()) @db.Uuid
+  clinicId      String   @map("clinic_id") @db.Uuid
+  appointmentId String   @map("appointment_id") @db.Uuid
+  anamnesisId   String   @map("anamnesis_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  clinic      Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  anamnesis   Anamnesis   @relation(fields: [anamnesisId], references: [id], onDelete: Cascade)
+
+  @@unique([appointmentId])
+  @@index([anamnesisId])
+  @@map("appointment_anamneses")
+}
+
+/// Catalogo de contraindicacoes da clinica.
+model Contraindication {
+  id                       String        @id @default(uuid()) @db.Uuid
+  clinicId                 String        @map("clinic_id") @db.Uuid
+  code                     String        @db.VarChar(40)
+  title                    String        @db.VarChar(120)
+  description              String?       @db.VarChar(600)
+  severity                 AlertSeverity @default(MEDIA)
+  /// Exige atestado medico assinado para autorizar a sessao.
+  requiresMedicalClearance Boolean       @default(false) @map("requires_medical_clearance")
+  active                   Boolean       @default(true)
+  createdAt                DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic           Clinic                    @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  therapies        TherapyContraindication[]
+  clientConditions ClientContraindication[]
+  alerts           ContraindicationAlert[]
+
+  @@unique([clinicId, code])
+  @@index([clinicId, active])
+  @@map("contraindications")
+}
+
+/// Terapias em que uma contraindicacao do catalogo merece alerta.
+///
+/// Join explicito, e nao o M:N implicito do Prisma: a tabela gerada
+/// implicitamente nao teria `clinic_id`, e o banco passaria a aceitar
+/// vincular uma terapia da clinica A a uma contraindicacao da clinica B.
+/// Alem disso, contraindicacao de um mesmo par de terapia e cliente e
+/// sempre igual, entao `severity` e `requiresMedicalClearance` podem ser
+/// sobrescritos por clinica sem duplicar a regra.
+model TherapyContraindication {
+  id                       String         @id @default(uuid()) @db.Uuid
+  clinicId                 String         @map("clinic_id") @db.Uuid
+  therapyId                String         @map("therapy_id") @db.Uuid
+  contraindicationId       String         @map("contraindication_id") @db.Uuid
+  /// Sobrescrevem o catalogo. Nulo = herda da Contraindication.
+  severity                 AlertSeverity? @map("severity")
+  requiresMedicalClearance Boolean?       @map("requires_medical_clearance")
+  createdAt                DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  clinic           Clinic           @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  therapy          Therapy          @relation(fields: [therapyId], references: [id], onDelete: Cascade)
+  contraindication Contraindication @relation(fields: [contraindicationId], references: [id], onDelete: Cascade)
+
+  @@unique([therapyId, contraindicationId])
+  @@index([clinicId, contraindicationId])
+  @@map("therapy_contraindications")
+}
+
+/// Condicao de saude de um cliente. Dado sensivel: acesso restrito
+/// a ADMIN e PROFISSIONAL, e nunca sai em log.
+model ClientContraindication {
+  id                       String        @id @default(uuid()) @db.Uuid
+  clinicId                 String        @map("clinic_id") @db.Uuid
+  clientId                 String        @map("client_id") @db.Uuid
+  contraindicationId       String?       @map("contraindication_id") @db.Uuid
+  /// Codigo livre quando a condicao nao vem do catalogo.
+  code                     String        @db.VarChar(40)
+  title                    String        @db.VarChar(120)
+  description              String?       @db.VarChar(600)
+  severity                 AlertSeverity @default(MEDIA)
+  requiresMedicalClearance Boolean       @default(false) @map("requires_medical_clearance")
+  /// Ex.: "gestante 32 semanas", "relato do cliente", "exame clinico".
+  source                   String?       @db.VarChar(200)
+  diagnosedAt              DateTime?     @map("diagnosed_at") @db.Date
+  resolvedAt               DateTime?     @map("resolved_at") @db.Date
+  notes                    String?       @db.VarChar(1000)
+  createdByUserId          String?       @map("created_by_user_id") @db.Uuid
+  createdAt                DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic           Clinic                  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  client           Client                  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contraindication Contraindication?       @relation(fields: [contraindicationId], references: [id], onDelete: SetNull)
+  createdBy        User?                   @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  alerts           ContraindicationAlert[]
+
+  @@index([clinicId, clientId, resolvedAt])
+  @@map("client_contraindications")
+}
+
+/// Alerta gerado na combinacao cliente x terapia.
+///
+/// O sistema AVISA, nao bloqueia: quem pode avaliar a contraindicacao
+/// real e o profissional com o cliente. O que o sistema garante e que a
+/// decisao fique registrada (ACEITO ou BLOQUEADO), o que protege o
+/// profissional e o cliente.
+model ContraindicationAlert {
+  id                       String        @id @default(uuid()) @db.Uuid
+  clinicId                 String        @map("clinic_id") @db.Uuid
+  appointmentId            String        @map("appointment_id") @db.Uuid
+  clientContraindicationId String?       @map("client_contraindication_id") @db.Uuid
+  contraindicationId       String?       @map("contraindication_id") @db.Uuid
+  severity                 AlertSeverity @default(MEDIA)
+  message                  String        @db.VarChar(600)
+  decision                 AlertDecision @default(PENDENTE)
+  decisionNotes            String?       @map("decision_notes") @db.VarChar(1000)
+  acknowledgedAt           DateTime?     @map("acknowledged_at") @db.Timestamptz(6)
+  acknowledgedByUserId     String?       @map("acknowledged_by_user_id") @db.Uuid
+  createdAt                DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  clinic           Clinic                  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointment      Appointment             @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  clientCondition  ClientContraindication? @relation(fields: [clientContraindicationId], references: [id], onDelete: Cascade)
+  contraindication Contraindication?       @relation(fields: [contraindicationId], references: [id], onDelete: SetNull)
+  acknowledgedBy   User?                   @relation("AlertAcknowledgedBy", fields: [acknowledgedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([appointmentId])
+  @@index([clinicId, decision])
+  @@map("contraindication_alerts")
+}
+
+// ===================================================================
+// Pacotes e financeiro
+// ===================================================================
+
+/// Pacote de sessoes. O saldo real e o count de PackageSession, nunca
+/// um contador guardado no pacote: dois campos para o mesmo saldo divergem.
+model Package {
+  id              String        @id @default(uuid()) @db.Uuid
+  clinicId        String        @map("clinic_id") @db.Uuid
+  clientId        String        @map("client_id") @db.Uuid
+  name            String        @db.VarChar(120)
+  totalSessions   Int           @map("total_sessions")
+  priceCents      Int           @map("price_cents")
+  validFrom       DateTime      @map("valid_from") @db.Date
+  validUntil      DateTime      @map("valid_until") @db.Date
+  status          PackageStatus @default(ATIVO)
+  notes           String?       @db.VarChar(600)
+  createdByUserId String?       @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic           Clinic           @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  client           Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdBy        User?            @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  sessions         PackageSession[]
+  financialEntries FinancialEntry[]
+
+  /// Dois pacotes com o mesmo nome para o mesmo cliente sao o mesmo
+  /// pacote. Sem esta chave, "Pacote 5 Sessoes" nasce quantas vezes o
+  /// balcao digitar o nome.
+  @@unique([clinicId, clientId, name])
+  @@index([clinicId, clientId, status])
+  @@index([clinicId, validUntil])
+  @@map("packages")
+}
+
+/// Uma sessao comprada dentro de um pacote.
+model PackageSession {
+  id            String               @id @default(uuid()) @db.Uuid
+  clinicId      String               @map("clinic_id") @db.Uuid
+  packageId     String               @map("package_id") @db.Uuid
+  /// Preenchida quando a sessao foi consumida em um agendamento.
+  appointmentId String?              @unique @map("appointment_id") @db.Uuid
+  status        PackageSessionStatus @default(DISPONIVEL)
+  consumedAt    DateTime?            @map("consumed_at") @db.Timestamptz(6)
+  expiresAt     DateTime?            @map("expires_at") @db.Date
+  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic      Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  package     Package      @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([packageId, status])
+  @@map("package_sessions")
+}
+
+/// Lancamento financeiro. RECEITA a receber e a receber sao o mesmo
+/// modelo com `status` diferente: PENDENTE vira PAGO, nunca sai o valor.
+model FinancialEntry {
+  id       String               @id @default(uuid()) @db.Uuid
+  clinicId String               @map("clinic_id") @db.Uuid
+  kind     FinancialEntryKind
+  status   FinancialEntryStatus @default(PENDENTE)
+  method   PaymentMethod?
+
+  clientId      String? @map("client_id") @db.Uuid
+  appointmentId String? @map("appointment_id") @db.Uuid
+  packageId     String? @map("package_id") @db.Uuid
+
+  amountCents Int       @map("amount_cents")
+  /// Vencimento. Usado pelo relatorio de inadimplencia e pelo lembrete.
+  dueDate     DateTime? @map("due_date") @db.Date
+  paidAt      DateTime? @map("paid_at") @db.Timestamptz(6)
+  /// Taxa de maos de obra, so para comissao de profissional.
+  feeCents    Int?      @map("fee_cents")
+
+  description     String?  @db.VarChar(300)
+  notes           String?  @db.VarChar(1000)
+  /// Id do gateway/provedor, para conciliar depois.
+  externalId      String?  @map("external_id") @db.VarChar(120)
+  /// Chave de idempotencia da escrita financeira. O gateway reenvia
+  /// webhook e o cliente clica duas vezes: sem isso, o mesmo atendimento
+  /// vira dois lancamentos e o caixa nao fecha. Mesmo padrao do
+  /// agendamento publico.
+  idempotencyKey  String?  @map("idempotency_key") @db.VarChar(80)
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic      Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  client      Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  package     Package?     @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  createdBy   User?        @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  commissions Commission[]
+
+  @@unique([clinicId, idempotencyKey])
+  @@index([clinicId, kind, status])
+  @@index([clinicId, dueDate])
+  @@index([clientId, status])
+  @@map("financial_entries")
+}
+
+/// Comissao do profissional. Percentual em basis points: 1000 = 10%.
+///
+/// Um lancamento e COMISSAO, nao DESPESA: sao visoes diferentes do
+/// mesmo fato, e somar as duas no relatorio contaria o dinheiro duas vezes.
+model Commission {
+  id               String  @id @default(uuid()) @db.Uuid
+  clinicId         String  @map("clinic_id") @db.Uuid
+  professionalId   String  @map("professional_id") @db.Uuid
+  appointmentId    String? @map("appointment_id") @db.Uuid
+  financialEntryId String? @map("financial_entry_id") @db.Uuid
+
+  baseAmountCents    Int              @map("base_amount_cents")
+  percentBasisPoints Int              @map("percent_basis_points")
+  amountCents        Int              @map("amount_cents")
+  status             CommissionStatus @default(PREVISTA)
+
+  periodStart DateTime  @map("period_start") @db.Date
+  periodEnd   DateTime  @map("period_end") @db.Date
+  paidAt      DateTime? @map("paid_at") @db.Timestamptz(6)
+  notes       String?   @db.VarChar(600)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic         Clinic          @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  professional   Professional    @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  appointment    Appointment?    @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  financialEntry FinancialEntry? @relation(fields: [financialEntryId], references: [id], onDelete: SetNull)
+
+  /// Um profissional tem uma comissao por sessao. `appointmentId` nulo
+  /// (adiantamento) nao colide: no Postgres, NULL nao conflita em unique.
+  @@unique([appointmentId, professionalId])
+  @@index([clinicId, professionalId, periodStart])
+  @@index([status])
+  @@map("commissions")
+}
+
+// ===================================================================
+// Notificacoes e auditoria
+// ===================================================================
+
+/// Outbox de notificacoes. A fila de execucao e do pg-boss; esta tabela
+/// e o registro de auditoria e a fila de reenvio. `dedupeKey` impede
+/// que o mesmo aviso seja disparado duas vezes (lembrete reexecutado).
+model Notification {
+  id            String              @id @default(uuid()) @db.Uuid
+  clinicId      String              @map("clinic_id") @db.Uuid
+  clientId      String?             @map("client_id") @db.Uuid
+  appointmentId String?             @map("appointment_id") @db.Uuid
+  channel       NotificationChannel
+  type          NotificationType
+  recipient     String              @db.VarChar(254)
+  subject       String?             @db.VarChar(200)
+  body          String              @db.Text
+  status        NotificationStatus  @default(PENDENTE)
+  attempts      Int                 @default(0)
+  lastError     String?             @map("last_error") @db.VarChar(600)
+  scheduledFor  DateTime            @map("scheduled_for") @db.Timestamptz(6)
+  sentAt        DateTime?           @map("sent_at") @db.Timestamptz(6)
+  externalId    String?             @map("external_id") @db.VarChar(160)
+  dedupeKey     String?             @unique @map("dedupe_key") @db.VarChar(160)
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  clinic      Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  client      Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
+  @@index([clinicId, type, createdAt])
+  @@index([appointmentId])
+  @@map("notifications")
+}
+
+/// Trilha de auditoria. Anexa ao usuario quando ele autentica, em
+/// separado do dado de negocio, para nao poluir a tabela de cada entidade.
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  clinicId    String?  @map("clinic_id") @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  action      String   @db.VarChar(80)
+  entity      String   @db.VarChar(80)
+  entityId    String?  @map("entity_id") @db.VarChar(80)
+  /// Diff ou contexto. NUNCA guardar aqui dado de saude em claro.
+  metadata    Json?
+  ip          String?  @db.VarChar(45)
+  userAgent   String?  @map("user_agent") @db.VarChar(300)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  clinic Clinic? @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  actor  User?   @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([clinicId, createdAt])
+  @@index([entity, entityId])
+  @@index([actorUserId, createdAt])
+  @@map("audit_logs")
+}

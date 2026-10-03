@@ -35,7 +35,14 @@ export default tseslint.config(
     languageOptions: {
       globals: { ...globals.node },
       parserOptions: {
-        projectService: true,
+        projectService: {
+          // A raiz do repo nao tem tsconfig.json -- ele fica em apps/*.
+          // `scripts/criar-env.mjs` roda antes de qualquer `pnpm install`,
+          // entao precisa ser JS puro, e o projectService so aceita arquivo
+          // fora de todo tsconfig pela allow-list. Sem isto o arquivo falha
+          // com "not found by the project service".
+          allowDefaultProject: ['scripts/*.mjs'],
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -78,10 +85,21 @@ export default tseslint.config(
   },
 
   {
-    files: ['**/*.config.{js,ts}', 'scripts/**/*.{js,ts}'],
+    // `files` casa caminhos relativos a raiz do config, nao ao pacote: sem
+    // o `**/`, um padrao `scripts/**` nunca alcança `apps/api/scripts/`.
+    files: ['**/*.config.{js,ts}', '**/scripts/**/*.{js,mjs,cjs,ts}'],
     rules: {
       'no-console': 'off',
       '@typescript-eslint/no-require-imports': 'off',
     },
+  },
+
+  {
+    // O seed e um programa de CLI: o resumo que ele imprime no terminal
+    // e a saida do programa, nao log esquecido no codigo. `no-console`
+    // existe para a aplicacao, onde console vira log orfao -- aqui o
+    // console.log e a interface.
+    files: ['apps/api/prisma/seed.ts'],
+    rules: { 'no-console': 'off' },
   },
 );

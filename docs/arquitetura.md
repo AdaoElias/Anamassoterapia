@@ -59,6 +59,51 @@ financeiro + fila.
 de erros legiveis. Falhar no start e melhor do que descobrir no meio de um
 agendamento que `JWT_ACCESS_SECRET` esta vazio.
 
+### Unicidade que o dominio exige, nao so a do `id`
+
+O padrao "confia na aplicacao" aparece no primeiro bug de concorrencia ou no
+primeiro duplo clique. Estas chaves existem para tornar a duplicata imposible:
+
+- `FinancialEntry (clinicId, idempotencyKey)`: o gateway reenvia webhook e o
+  cliente clica duas vezes. `idempotencyKey` e anulavel de proposito -- lancamento
+  digitado no balcao nao tem chave, e no PostgreSQL `NULL` nunca conflita num
+  indice unico.
+- `Package (clinicId, clientId, name)`: dois pacotes com o mesmo nome para o mesmo
+  cliente sao o mesmo pacote. Sem isso, "Pacote 5 Sessoes" nasce quantas vezes o
+  balcao digitar o nome.
+- `Commission (appointmentId, professionalId)`: um profissional tem uma comissao
+  por sessao. `appointmentId` nulo (adiantamento) tambem nao conflita.
+
+### Unicidade do bloqueio de dia inteiro exige indice parcial
+
+`AvailabilityException` tem `@@unique([professionalId, date, type, startMinute])`
+e mesmo assim nao impedia dois bloqueios de dia inteiro, porque esse caso e
+gravado com `startMinute = NULL` e `NULL` nunca conflita num indice unico. O
+`upsert` do Prisma tambem nao ajudava: ele vira `start_minute = NULL`, que nunca
+e verdadeiro, e criava uma linha nova a cada execucao.
+
+As colunas continuam anulaveis -- "janela ausente" e "dia inteiro" sao estados
+diferentes, e o `CHECK availability_exceptions_extra_has_window` depende disso. A
+chave que fecha a brecha e um indice unico parcial:
+
+```sql
+CREATE UNIQUE INDEX availability_exceptions_all_day_key
+  ON availability_exceptions (professional_id, date, type)
+  WHERE start_minute IS NULL;
+```
+
+Com janela, o indice de 4 colunas resolve; sem janela, este resolve.
+
+### Join explicito quando a pacao carrega dado proprio
+
+O vinculo terapia/contraindicacao nasceu como M:N implicito do Prisma. Ele virou a
+tabela `therapy_contraindications` porque a pacao precisa carregar dado por
+clinica: `severity` e `requiresMedicalClearance` sobrescrevem o catalogo global
+(gestacao e `ALTA` para drenagem e `MEDIA` para shiatsu).
+
+M:N implicito nao aceita coluna. Descobrir isso depois significa migrar a tabela
+e reescrever as queries.
+
 ## Dominio
 
 Decisoes que ja evitam retrabalho quando o negocio crescer.
@@ -84,6 +129,35 @@ Motivo: prontuario que aceita sobrescrita perde a trilha do que o profissional
 sabia no momento da sessao. Se houver processo judicial, a versao vigente e a
 historica precisam ser provaveis. E um requisito de LGPD: dado de saude
 nao pode ser alterado em silencio.
+
+A imutabilidade das respostas e garantida por `CHECK` no banco: depois de
+`ENVIADA`, um `UPDATE` em `answers_encrypted` e recusado, enquanto o status pode
+avancar para `APROVADA` e o `RASCUNHO` continua editavel.
+
+### Anamnese cifrada em AES-256-GCM
+
+`answers_encrypted` guarda dado de saude (LGPD, art. 5 II e XI). Um dump do
+banco vazado e um prontuario de centenas de pessoas na mao de quem nao tem por que
+ver. O `SELECT` de metadados continua possivel -- status, versao, quem revisou,
+quando. So a resposta some.
+
+O valor persistido e `v1:<iv>:<tag>:<ciphertext>`, em base64, com prefixo de
+versao para o algoritmo poder mudar sem adivinhar. Escolhas que nao sao
+negociaveis:
+
+- **GCM, nao CBC**: GCM traz autenticacao embutida. Alterar um byte do texto
+  cifrado faz a decifragem falhar em vez de devolver lixo.
+- **IV novo a cada cifragem**: reusar IV em GCM com a mesma chave expoe a relacao
+  entre dois textos e quebra a autenticacao.
+- **`templateId` dentro da cifra**: o JSON Schema do formulario pode mudar
+  depois. Com o template amarrado a versao da resposta, da para decifrar um
+  registro antigo e saber com qual formulario ele foi respondido.
+- **`contentHash` (SHA-256 do texto cifrado)**: detecta adulteracao sem precisar
+  decifrar.
+
+A chave vem de `ANAMNESIS_ENCRYPTION_KEY`, validada no bootstrap: 64 caracteres
+hexadecimais. Valor de exemplo em `.env.example`; em producao, gerado por
+`crypto.randomBytes(32)`.
 
 ### Agenda sem conflito garantida pelo banco
 
@@ -115,11 +189,125 @@ quanto para o cliente.
 
 ## Autenticacao
 
-Argon2id para senha, JWT curto (15 min) + refresh em cookie httpOnly. O access
-token vai no header; o refresh nunca e legivel por JavaScript, o que mitiga
-XSS.
+### Senha: Argon2id, um unico caminho
 
-Rate limit global e mais apertado em login, recuperacao de senha e refresh.
+`hashPassword` usa Argon2id com os parametros lidos do `.env`. O seed e a API
+chamam o mesmo modulo: quando o seed gerava o hash por conta propria, o
+parametro podia divergir e o login falhava sem ninguem saber por que.
+
+### Access token: JWT HS256, 15 minutos
+
+Assinado e verificado com `node:crypto`, sem dependencia nova. O header tem
+`alg` fixo em HS256 e a comparacao da assinatura e `timingSafeEqual` -- fixar
+o algoritmo e o que impede o ataque de trocar `alg` para `none`. O token
+carrega `sub`, `membershipId`, `clinicId`, `role` e `epoch`.
+
+`epoch` e o `users.tokenEpoch`. JWT nao tem lista de revogacao, entao e o que
+faz um token ja emitido morrer depois de troca de senha: o `/auth/me` compara
+o `epoch` do token com o do banco a cada request.
+
+### Refresh: opaco, rotativo, com familia
+
+O refresh e um valor aleatorio de 32 bytes, guardado apenas como SHA-256. Nao
+e JWT de proposito: um refresh stateless nao pode ser revogado.
+
+Cada refresh pertence a uma familia. Ao girar, o token antigo recebe
+`replacedById` apontando para o novo. Se um token **ja rotacionado** voltar a
+ser usado, e sinal de roubo: a familia inteira e revogada, inclusive o token
+mais novo, que seria o do atacante.
+
+A rotacao usa compare-and-swap (`updateMany` com `revokedAt: null` e
+`count === 1`), nao `update` por id. Com dois requests simultaneos, sem CAS os
+dois leem "ativo" e os dois giram -- o navegador fica com dois refreshs validos
+e a rotacao vira decoracao.
+
+### A sessao pertence a uma clinica
+
+`refresh_tokens.membership_id` existe porque a mesma pessoa pode ter papeis em
+clinicas diferentes. O refresh precisa carregar **qual** sessao, senao o access
+token novo perde a escolha feita no login.
+
+No login com mais de uma clinica a API responde `escolha_de_clinica` com a
+lista e **nao** emite token: emitir para a clinica errada serviria dado errado.
+
+### Cookie
+
+`httpOnly`, `SameSite=Lax`, `Secure` so em producao. O `path` acompanha o
+ambiente (`/api/auth` no dev, porque o proxy remove `/api`; `/auth` em
+producao). `Secure` fica de fora no dev de proposito: sem TLS o navegador
+descarta o cookie em silencio, e o sintoma e "refresh nao funciona" sem erro
+no servidor.
+
+O tempo de vida do refresh sai de `JWT_REFRESH_TTL_DAYS` (30 por padrao).
+
+### Rate limit e anti-enumeracao
+
+Login 5/min, recuperacao 3/5 min, refresh 30/min, redefinicao 5/5 min. Login e
+recuperacao respondem igual exista a conta ou nao, para nao virarem enumerador
+de e-mails.
+
+### Web guarda o access token em memoria
+
+Nada de `localStorage`/`sessionStorage`: um XSS que le `localStorage` rouba a
+sessao. O token vive em memoria e, no F5, o bootstrap tenta um unico
+`/auth/refresh` para reconstruir a sessao a partir do cookie httpOnly.
+
+
+## Verificacao
+
+### A suite nunca escreve no banco de dev
+
+`tests/setup.ts` troca `DATABASE_URL` por `TEST_DATABASE_URL` e **recusa a rodar**
+se o banco nao terminar em `_test`. Sem essa trava, um teste que grava escreve no
+banco de trabalho e o registro fantasma aparece semanas depois -- e sobrevive a
+um `migrate reset`, porque o seed compartilha o mesmo banco de dev.
+
+Falhar no bootstrap e o unico momento em que o engano ainda e barato.
+
+### As garantias do banco sao testadas pelo SQLSTATE, nao por `toThrow`
+
+Constraint de Postgres vira `23P01` (exclusao), `23514` (check) ou `23505`
+(unico). E desse codigo que a API deriva 409 e 422, entao e ele que o teste
+precisa fixar:
+
+```ts
+expect(estado).toBe(EXCLUSION_VIOLATION);
+```
+
+`await expect(...).rejects.toThrow()` sem codigo passa com qualquer erro,
+inclusive um erro de digitacao no SQL. Fica verde sem verificar nada.
+
+A suite completa (15 verificacoes, cobrindo agenda, anamnese, historico,
+financeiro e disponibilidade) vive em `apps/api/prisma/verify/constraints.sql` e
+roda dentro de uma transacao com `ROLLBACK`, entao nao deixa residuo:
+
+```bash
+pnpm --filter @massoterapia/api db:verify
+```
+
+O script imprime o resultado em `RAISE NOTICE`, e `NOTICE` nao afeta exit code --
+o CI passaria com "FALHOU" scrollsando no meio do log. O runner em
+`apps/api/scripts/verify-constraints.ts` captura o evento `notice` do driver
+`pg` e converte a excecao final do bloco `DO` em codigo de saida diferente de
+zero. O mesmo vale no CI.
+
+## Observabilidade
+
+### Liveness e readiness separados
+
+- `GET /health` responde "o processo esta vivo". Nao toca no banco.
+- `GET /health/ready` responde "o processo consegue atender". Consulta o banco e
+  devolve 503 quando ele nao responde.
+
+A distincao importa no deploy: um liveness que depende do banco mata o container
+quando o Postgres reinicia, e o orquestrador passa a reiniciar a aplicacao -- que
+nao tem culpa nenhuma -- num loop.
+
+O probe tem timeout de 3s. O pool pode esperar 10s por conexao, e um readiness
+que espera 10s nao serve para nada: o load balancer ja desistiu.
+
+A mensagem de 503 e generica de proposito. A string de erro do driver carrega
+host, porta, usuario e senha; ela fica no log do servidor, nunca na resposta.
 
 ## Frontend
 

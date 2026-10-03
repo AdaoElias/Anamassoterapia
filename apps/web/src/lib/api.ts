@@ -1,10 +1,12 @@
 import { QueryClient } from '@tanstack/react-query';
 
 import { env } from './env';
+import { getAccessToken, setAccessToken } from './token';
 
 /**
- * Cliente HTTP unico. Centraliza baseURL, `credentials` (obrigatorio para o
- * cookie httpOnly de refresh) e o tratamento de erro padronizado da API.
+ * Cliente HTTP unico. Centraliza baseURL, o `Authorization` do access token,
+ * `credentials` (obrigatorio para o cookie httpOnly de refresh) e o
+ * tratamento de erro padronizado da API.
  */
 export class ApiError extends Error {
   readonly status: number;
@@ -19,7 +21,7 @@ export class ApiError extends Error {
     this.requestId = requestId;
   }
 
-  /** 401 significa token expirado: o AuthProvider tenta o refresh uma vez. */
+  /** 401 significa token expirado: `apiFetch` tenta o refresh uma vez. */
   get isUnauthorized(): boolean {
     return this.status === 401;
   }
@@ -29,24 +31,32 @@ export class ApiError extends Error {
   }
 }
 
-type RequestOptions = Omit<RequestInit, 'body'> & { body?: unknown; raw?: boolean };
+type RequestOptions = Omit<RequestInit, 'body'> & {
+  body?: unknown;
+  raw?: boolean;
+  /** Desliga o retry pos-refresh. O proprio `/auth/refresh` usa. */
+  skipAuthRetry?: boolean;
+};
 
 let refreshInFlight: Promise<boolean> | null = null;
 
-export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { body, raw, headers, ...rest } = options;
+function montarInit(options: RequestOptions, token: string | null): RequestInit {
+  const { body, raw, headers, skipAuthRetry: _skip, ...rest } = options;
 
-  const response = await fetch(`${env.VITE_API_URL}${path}`, {
+  return {
     ...rest,
     credentials: 'include',
     headers: {
       Accept: 'application/json',
+      ...(token === null ? {} : { Authorization: `Bearer ${token}` }),
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       ...headers,
     },
     ...(body === undefined ? {} : { body: raw ? (body as BodyInit) : JSON.stringify(body) }),
-  });
+  };
+}
 
+async function interpretar<T>(response: Response, path: string): Promise<T> {
   if (response.status === 204) return undefined as T;
 
   const payload: unknown = await response.json().catch(() => null);
@@ -74,6 +84,23 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   return payload as T;
 }
 
+export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  let response = await fetch(`${env.VITE_API_URL}${path}`, montarInit(options, getAccessToken()));
+
+  // 401 com token em maos e token expirado: renova uma vez e repete a
+  // requisicao. As duas guardas importam -- sem `getAccessToken()`, um 401
+  // de credencial errada no login dispararia refresh a toa; sem
+  // `skipAuthRetry`, o `/auth/refresh` que ja retornou 401 tentaria se
+  // renovar, em recursao.
+  if (response.status === 401 && options.skipAuthRetry !== true && getAccessToken() !== null) {
+    if (await refreshSession()) {
+      response = await fetch(`${env.VITE_API_URL}${path}`, montarInit(options, getAccessToken()));
+    }
+  }
+
+  return interpretar<T>(response, path);
+}
+
 /**
  * Tenta um unico refresh em paralelo. Varias chamadas que falham com 401
  * ao mesmo tempo compartilham a mesma promessa: senao cada uma dispara
@@ -82,9 +109,16 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 export async function refreshSession(): Promise<boolean> {
   refreshInFlight ??= (async () => {
     try {
-      await apiFetch<{ accessToken: string }>('/api/auth/refresh', { method: 'POST' });
+      const resposta = await apiFetch<{ accessToken: string }>('/auth/refresh', {
+        method: 'POST',
+        skipAuthRetry: true,
+      });
+      setAccessToken(resposta.accessToken);
       return true;
     } catch {
+      // Refresh invalido/expirado/reutilizado: a sessao acabou. Zerar o
+      // token evita requisicoes seguintes com credencial morta.
+      setAccessToken(null);
       return false;
     } finally {
       refreshInFlight = null;

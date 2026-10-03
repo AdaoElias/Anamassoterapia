@@ -18,7 +18,8 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
-    "db:reset": "prisma migrate reset --force"
+    "db:reset": "prisma migrate reset --force",
+    "db:verify": "tsx scripts/verify-constraints.ts"
   },
   "dependencies": {
     "@fastify/cookie": "catalog:",
@@ -30,16 +31,19 @@
     "@fastify/swagger-ui": "catalog:",
     "@massoterapia/shared": "workspace:*",
     "@node-rs/argon2": "catalog:",
+    "@prisma/adapter-pg": "catalog:",
     "@prisma/client": "catalog:",
     "dotenv": "catalog:",
     "fastify": "catalog:",
     "fastify-type-provider-zod": "catalog:",
+    "pg": "catalog:",
     "pg-boss": "catalog:",
     "pino": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@types/pg": "catalog:",
     "pino-pretty": "catalog:",
     "prisma": "catalog:",
     "rimraf": "catalog:",

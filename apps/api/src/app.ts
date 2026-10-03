@@ -16,7 +16,6 @@ import type {
 } from 'fastify';
 import fastify from 'fastify';
 import {
-  hasZodFastifySchemaValidationErrors,
   jsonSchemaTransform,
   serializerCompiler,
   validatorCompiler,
@@ -24,7 +23,10 @@ import {
 } from 'fastify-type-provider-zod';
 
 import { env } from './config/env.js';
+import { registrarAutenticacao } from './plugins/auth.js';
+import { authRoutes } from './routes/auth.js';
 import { healthRoutes } from './routes/health.js';
+import { type ReadyProbe, readyRoutes } from './routes/ready.js';
 
 /** Tipo da app: a partir do schema Zod, request/reply/body sao tipados. */
 export type App = FastifyInstance<
@@ -35,12 +37,29 @@ export type App = FastifyInstance<
   ZodTypeProvider
 >;
 
+export interface BuildAppOptions {
+  /**
+   * Substitui o probe de prontidao. Existe para exercitar o caminho de
+   * falha: derrubar o Postgres de verdade em teste seria lento e nao
+   * deterministico, e o que se quer verificar aqui e a resposta HTTP, nao
+   * a queda do servidor.
+   */
+  readyProbe?: ReadyProbe;
+
+  /**
+   * Substitui a verificacao de senha argon2. Sem isso cada caso de teste de
+   * login paga 19MiB de memoria e ~80ms de CPU; com isso, o teste mede a
+   * rota e nao o KDF.
+   */
+  verificarSenha?: (hashGuardado: string, senha: string) => Promise<boolean>;
+}
+
 /**
  * Monta a aplicacao sem abrir a porta. `index.ts` chama listen,
  * os testes usam `app.inject()`. Essa separacao e o que torna a
  * suite rapida e sem dependencia de rede.
  */
-export async function buildApp(): Promise<App> {
+export async function buildApp(options: BuildAppOptions = {}): Promise<App> {
   const app = fastify({
     logger: {
       level: env.isProduction ? 'info' : 'debug',
@@ -109,6 +128,64 @@ export async function buildApp(): Promise<App> {
     keyGenerator: (request) => request.ip,
   });
 
+  // `setErrorHandler` e `setNotFoundHandler` precisam vir **antes** do
+  // registro das rotas. Em `route.js`, o RouteContext copia
+  // `server[kErrorHandler]` no instante em que a rota e definida
+  // (`context.errorHandler = ... this[kErrorHandler]`); definido depois, o
+  // handler existe mas nenhuma rota enxerga. O efeito era silencioso e
+  // enganoso: o handler parecia configurado, e so aparecia em stack trace.
+  app.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
+    // **Nao** se usa `hasZodFastifySchemaValidationErrors` da
+    // fastify-type-provider-zod aqui. Aquele guard procura um simbolo que a
+    // lib coloca em cada issue do Zod, mas o `defaultSchemaErrorFormatter` do
+    // Fastify reconstroi o array `validation` e perde o simbolo. Resultado: o
+    // guard responde `false` para todo erro de validacao, e o 422 nunca sai --
+    // qualquer payload invalido voltava 400 com o texto cru do Zod. A
+    // verificacao e no `validation` preenchido, que e o contrato do Fastify e
+    // nao depende de detalhe de implementacao de third party.
+    const validation = (error as { validation?: unknown }).validation;
+
+    if (Array.isArray(validation) && validation.length > 0) {
+      request.log.warn({ err: error }, 'payload invalido');
+      return reply.code(422).send({
+        error: 'VALIDATION_ERROR',
+        message: 'Dados invalidos. Revise os campos destacados.',
+        fields: (validation as Array<{ instancePath?: string; message?: string }>).map((issue) => ({
+          field: (issue.instancePath ?? '').replace(/^\//, '').replace(/\//g, '.'),
+          message: issue.message ?? 'Valor invalido',
+        })),
+        requestId: request.id,
+      });
+    }
+
+    const statusCode = error.statusCode ?? 500;
+
+    if (statusCode >= 500) {
+      request.log.error({ err: error }, 'erro nao tratado');
+    } else {
+      request.log.warn({ err: error, statusCode }, 'erro tratado');
+    }
+
+    return reply.code(statusCode).send({
+      error: error.name || 'INTERNAL_ERROR',
+      // Mensagem de 500 nunca vaza detalhe interno para o cliente.
+      message: statusCode >= 500 ? 'Erro interno. Tente novamente.' : error.message,
+      requestId: request.id,
+    });
+  });
+
+  app.setNotFoundHandler((request: FastifyRequest, reply: FastifyReply) => {
+    reply.code(404).send({
+      error: 'NOT_FOUND',
+      message: `Rota ${request.method} ${request.url} nao encontrada`,
+    });
+  });
+
+  // Antes das rotas: `authRoutes` usa `definirCookieRefresh` e
+  // `requireAuth` como `preHandler` no momento do registro, e as rotas
+  // protegidas das proximas etapas vao precisar dos dois.
+  registrarAutenticacao(app);
+
   await app.register(fastifySwagger, {
     // Deriva o OpenAPI dos schemas Zod das rotas.
     transform: jsonSchemaTransform,
@@ -144,45 +221,15 @@ export async function buildApp(): Promise<App> {
   }
 
   await app.register(healthRoutes, { prefix: '/health' });
-
-  app.setNotFoundHandler((request: FastifyRequest, reply: FastifyReply) => {
-    reply.code(404).send({
-      error: 'NOT_FOUND',
-      message: `Rota ${request.method} ${request.url} nao encontrada`,
-    });
+  // Filho de /health, registrado separado porque leva dependencia externa
+  // (o banco) enquanto o liveness acima e livre de dependencia.
+  await app.register(readyRoutes, {
+    prefix: '/health/ready',
+    ...(options.readyProbe === undefined ? {} : { probe: options.readyProbe }),
   });
-
-  // Rotas com limite mais apertado (login, recuperacao de senha, refresh)
-  // sobrescrevem via `config: { rateLimit: { max, timeWindow } }` na rota.
-  app.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
-    if (hasZodFastifySchemaValidationErrors(error)) {
-      request.log.warn({ err: error }, 'payload invalido');
-      return reply.code(422).send({
-        error: 'VALIDATION_ERROR',
-        message: 'Dados invalidos. Revise os campos destacados.',
-        fields: error.validation.map((issue) => ({
-          field: issue.instancePath.replace(/^\//, '').replace(/\//g, '.'),
-          message: issue.message ?? 'Valor invalido',
-        })),
-        requestId: request.id,
-      });
-    }
-
-    const statusCode = error.statusCode ?? 500;
-
-    if (statusCode >= 500) {
-      request.log.error({ err: error }, 'erro nao tratado');
-    } else {
-      request.log.warn({ err: error, statusCode }, 'erro tratado');
-    }
-
-    return reply.code(statusCode).send({
-      error: error.name || 'INTERNAL_ERROR',
-      // Mensagem de 500 nunca vaza detalhe interno para o cliente.
-      message: statusCode >= 500 ? 'Erro interno. Tente novamente.' : error.message,
-      requestId: request.id,
-    });
+  await app.register(authRoutes, {
+    prefix: '/auth',
+    ...(options.verificarSenha === undefined ? {} : { verificarSenha: options.verificarSenha }),
   });
-
   return app;
 }

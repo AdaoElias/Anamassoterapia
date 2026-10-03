@@ -14,6 +14,15 @@ env:
   TURBO_TELEMETRY_DISABLED: '1'
   TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha || github.sha }}
 
+  # O .env e gitignored, entao tudo que a aplicacao le em bootstrap vem
+  # daqui. `schema.prisma` nao tem `url`: no Prisma 7 a string de conexao
+  # vem do `prisma.config.ts`, que le estas mesmas variaveis.
+  DATABASE_URL: postgresql://massoterapia:massoterapia_dev@localhost:5432/massoterapia_test?schema=public
+  TEST_DATABASE_URL: postgresql://massoterapia:massoterapia_dev@localhost:5432/massoterapia_test?schema=public
+  JWT_ACCESS_SECRET: ci-access-secret-com-tamanho-minimo-de-32-chars
+  JWT_REFRESH_SECRET: ci-refresh-secret-com-tamanho-minimo-de-32-chars
+  ANAMNESIS_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000001
+
 jobs:
   quality:
     name: Lint, tipos, testes e build
@@ -29,7 +38,7 @@ jobs:
           POSTGRES_DB: massoterapia_test
         ports: ['5432:5432']
         options: >-
-          --health-cmd "pg_isready -U massoterapia"
+          --health-cmd "pg_isready -U massoterapia -d massoterapia_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -47,11 +56,17 @@ jobs:
       - name: Instalar dependencias
         run: pnpm install --frozen-lockfile
 
-      - name: Preparar extensoes do Postgres (constraint de agenda + pgcrypto)
-        run: |
-          docker exec -i ${{ job.services.postgres.id }} psql -U massoterapia -d massoterapia_test \
-            -c "CREATE EXTENSION IF NOT EXISTS btree_gist;" \
-            -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+      # O client gerado esta em src/generated, que e gitignored: em CI ele
+      # nao existe ate este passo. Sem ele, `typecheck` falha por modulo
+      # inexistente e nao por erro de codigo.
+      - name: Gerar o Prisma Client
+        run: pnpm --filter @massoterapia/api db:generate
+
+      # Aplica as 6 migrations, incluindo as extensoes: a primeira
+      # migration ja cria `btree_gist` e `pgcrypto` com IF NOT EXISTS,
+      # entao nao ha passo de preparo de extensao aqui.
+      - name: Aplicar migrations
+        run: pnpm --filter @massoterapia/api db:migrate:deploy
 
       - name: Verificar formato
         run: pnpm run format:check
@@ -62,20 +77,19 @@ jobs:
       - name: Verificar tipos
         run: pnpm run typecheck
 
+      # Prova que o seed roda contra um schema recem-migrado e vazio --
+      # o cenario em que ele mais quebra.
+      - name: Seed
+        run: pnpm --filter @massoterapia/api db:seed
+
       - name: Testes
         run: pnpm run test
-        env:
-          NODE_ENV: test
-          TEST_DATABASE_URL: postgresql://massoterapia:massoterapia_dev@localhost:5432/massoterapia_test?schema=public
-          DATABASE_URL: postgresql://massoterapia:massoterapia_dev@localhost:5432/massoterapia_test?schema=public
-          JWT_ACCESS_SECRET: ci-access-secret-com-tamanho-minimo-de-32-chars
-          JWT_REFRESH_SECRET: ci-refresh-secret-com-tamanho-minimo-de-32-chars
-          ANAMNESIS_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000001
+
+      # As 15 garantias de dominio que o TypeScript nao consegue
+      # expressar. Sem este passo, uma constraint removida por engano
+      # passa: `rejects.toThrow()` sem SQLSTATE casa com qualquer erro.
+      - name: Verificar constraints do banco
+        run: pnpm --filter @massoterapia/api db:verify
 
       - name: Build
         run: pnpm run build
-        env:
-          DATABASE_URL: postgresql://massoterapia:massoterapia_dev@localhost:5432/massoterapia_test?schema=public
-          JWT_ACCESS_SECRET: ci-access-secret-com-tamanho-minimo-de-32-chars
-          JWT_REFRESH_SECRET: ci-refresh-secret-com-tamanho-minimo-de-32-chars
-          ANAMNESIS_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000001

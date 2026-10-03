@@ -14,6 +14,7 @@ out/
 
 # Prisma generated client
 apps/api/src/generated/
+apps/api/prisma/*.db
 
 # Environment
 .env
@@ -38,10 +39,6 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# Prisma generated client
-apps/api/src/generated/
-apps/api/prisma/*.db
 
 # Local artifacts
 tmp/

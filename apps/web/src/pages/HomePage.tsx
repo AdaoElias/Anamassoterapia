@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { useAuth } from '@/components/auth/AuthProvider';
 import { Badge } from '@/components/ui/badge';
 import { apiFetch } from '@/lib/api';
 
@@ -12,6 +13,8 @@ interface HealthPayload {
 }
 
 export function HomePage() {
+  const { estado, sair } = useAuth();
+
   const { data, isPending, isError } = useQuery({
     queryKey: ['health'],
     queryFn: () => apiFetch<HealthPayload>('/health'),
@@ -20,11 +23,31 @@ export function HomePage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col justify-center gap-8 p-6">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Massoterapia</h1>
-        <p className="text-slate-600">
-          Plataforma de agendamento e gestao para clinicas de massoterapia.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Massoterapia</h1>
+          <p className="text-slate-600">
+            Plataforma de agendamento e gestao para clinicas de massoterapia.
+          </p>
+        </div>
+
+        {estado.status === 'autenticado' ? (
+          <div className="flex shrink-0 items-center gap-3">
+            <div className="text-right">
+              <p className="text-sm font-medium text-slate-900">{estado.perfil.name}</p>
+              <p className="text-xs text-slate-500">
+                {estado.perfil.clinicName} · {estado.perfil.role}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void sair()}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+            >
+              Sair
+            </button>
+          </div>
+        ) : null}
       </header>
 
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
