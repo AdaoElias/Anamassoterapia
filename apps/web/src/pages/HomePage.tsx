@@ -15,6 +15,8 @@ interface HealthPayload {
 }
 
 const ATALHOS = [
+  { to: '/agenda', titulo: 'Agenda', descricao: 'Sessoes do dia por profissional.' },
+  { to: '/disponibilidade', titulo: 'Disponibilidade', descricao: 'Horarios, folgas e feriados.' },
   { to: '/terapias', titulo: 'Terapias', descricao: 'Cardapio, duracao e precos.' },
   { to: '/profissionais', titulo: 'Profissionais', descricao: 'Equipe e terapias habilitadas.' },
   { to: '/clientes', titulo: 'Clientes', descricao: 'Cadastro e contato.' },

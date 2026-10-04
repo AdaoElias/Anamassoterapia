@@ -7,6 +7,8 @@ import { env } from '@/lib/env';
 
 const LINKS: Array<{ to: string; rotulo: string; fim: boolean }> = [
   { to: '/', rotulo: 'Painel', fim: true },
+  { to: '/agenda', rotulo: 'Agenda', fim: false },
+  { to: '/disponibilidade', rotulo: 'Disponibilidade', fim: false },
   { to: '/terapias', rotulo: 'Terapias', fim: false },
   { to: '/profissionais', rotulo: 'Profissionais', fim: false },
   { to: '/clientes', rotulo: 'Clientes', fim: false },

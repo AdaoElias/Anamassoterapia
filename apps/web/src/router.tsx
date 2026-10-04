@@ -3,10 +3,13 @@ import { createBrowserRouter, Navigate, useLocation } from 'react-router';
 
 import { useAuth } from '@/components/auth/AuthProvider';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { AgendaPage } from '@/pages/AgendaPage';
 import { ClientesPage } from '@/pages/ClientesPage';
 import { ClinicaPage } from '@/pages/ClinicaPage';
+import { DisponibilidadePage } from '@/pages/DisponibilidadePage';
 import { HomePage } from '@/pages/HomePage';
 import { LoginPage } from '@/pages/LoginPage';
+import { PortalPage } from '@/pages/PortalPage';
 import { ProfissionaisPage } from '@/pages/ProfissionaisPage';
 import { TerapiasPage } from '@/pages/TerapiasPage';
 
@@ -46,6 +49,8 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <HomePage /> },
+      { path: 'agenda', element: <AgendaPage /> },
+      { path: 'disponibilidade', element: <DisponibilidadePage /> },
       { path: 'terapias', element: <TerapiasPage /> },
       { path: 'profissionais', element: <ProfissionaisPage /> },
       { path: 'clientes', element: <ClientesPage /> },
@@ -53,7 +58,8 @@ export const router = createBrowserRouter([
     ],
   },
   { path: '/login', element: <LoginPage /> },
-  // O portal publico de agendamento entra na Etapa 4.
+  // Portal publico de agendamento: acessivel sem login, identificado pelo slug.
+  { path: '/agendar/:slug', element: <PortalPage /> },
   { path: '/agendar', element: <Navigate to="/" replace /> },
   { path: '*', element: <Navigate to="/" replace /> },
 ]);

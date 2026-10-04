@@ -25,9 +25,32 @@ export function dataDeNascimento(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
+/** Data civil `YYYY-MM-DD` para coluna `@db.Date`, a meia-noite UTC. */
+export function dataCalendario(value: string): Date {
+  return new Date(`${value}T00:00:00.000Z`);
+}
+
 /** `Date` -> `YYYY-MM-DD`; nulo continua nulo. */
 export function paraDataISO(value: Date | null): string | null {
   return value === null ? null : value.toISOString().slice(0, 10);
+}
+
+/**
+ * Violacao da constraint de exclusao da agenda. O Prisma embrulha o SQLSTATE
+ * `23P01` do Postgres em `P2039`, e a mensagem ainda pode vir traduzida
+ * ("viola a restricao de exclusao"). Por isso a deteccao olha o codigo no
+ * topo, o SQLSTATE aninhado no driver e, por ultimo, o texto em ingles.
+ */
+export function ehConflitoAgenda(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const erro = error as {
+    code?: unknown;
+    message?: unknown;
+    meta?: { driverAdapterError?: { cause?: { originalCode?: unknown } } };
+  };
+  if (erro.code === '23P01') return true;
+  if (erro.meta?.driverAdapterError?.cause?.originalCode === '23P01') return true;
+  return typeof erro.message === 'string' && erro.message.includes('exclusion constraint');
 }
 
 /**

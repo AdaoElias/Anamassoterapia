@@ -57,3 +57,28 @@ export function paraCentavos(valor: string): number {
 export function deCentavos(centavos: number): string {
   return (centavos / 100).toFixed(2);
 }
+
+/** Instante ISO -> "HH:MM" no fuso do navegador. */
+export function formatarHoraISO(valor: string): string {
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return '';
+  return data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Data de hoje (`YYYY-MM-DD`) no fuso do navegador, para `<input type="date">`. */
+export function dataDeHojeISO(): string {
+  const agora = new Date();
+  return new Date(agora.getTime() - agora.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+}
+
+/** Valor de `<input type="datetime-local">` -> instante ISO em UTC. */
+export function paraInstanteISO(valor: string): string {
+  return new Date(valor).toISOString();
+}
+
+/** Instante ISO -> "YYYY-MM-DDTHH:MM" local, para `<input type="datetime-local">`. */
+export function paraInputDateTime(valorISO: string): string {
+  const data = new Date(valorISO);
+  const local = new Date(data.getTime() - data.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}

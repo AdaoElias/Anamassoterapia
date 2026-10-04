@@ -295,6 +295,88 @@ A terapia ganha `slug` a partir do nome quando o campo nao e enviado. Editar o
 nome depois **nao** reescreve o slug: o slug e a chave estavel de link publico, e
 mudar conforme o nome quebraria links ja divulgados.
 
+## Agenda e disponibilidade
+
+### Fuso horario sem biblioteca de datas
+
+`startAt`/`endAt` trafegam e sao gravados em UTC. O fuso da clinica
+(`Clinic.timezone`) so entra na apresentacao e no calculo de slots. Como o
+projeto nao carrega biblioteca de datas, `packages/shared/src/utils/datetime.ts`
+converte com `Intl` -- que ja conhece o historico de horario de verao de cada
+regiao -- montando os componentes locais como se fossem UTC, medindo o
+deslocamento do fuso e subtraindo, com uma segunda passada para a virada de
+horario de verao.
+
+### Disponibilidade em tres camadas
+
+`AvailabilityRule` e a grade semanal recorrente; `AvailabilityException` cobre
+folga parcial/dia inteiro (`BLOQUEIO`) e janela extra (`EXTRA`); `ClinicHoliday`
+fecha a clinica inteira. O motor de slots (`apps/api/src/lib/scheduling.ts`) e
+puro e deterministico: recebe regras, excecoes, feriados, ocupacao e a duracao e
+devolve uma lista, sem tocar no banco -- o que o torna testavel sem fixtures.
+
+Horarios sao minutos desde a meia-noite no fuso da clinica (`540` = `09:00`); a
+conversao para UTC acontece so no motor.
+
+### Slots nao se sobrepoem entre si
+
+Depois de aceitar um horario, o cursor avanca `duracao + buffer`, entao dois
+slots sugeridos nunca colidem. A `granularity` (5 a 240 min) controla apenas o
+passo ao pular um candidato rejeitado por conflito, nao o espacamento entre
+slots. O buffer impede encostar uma sessao na outra; a ocupacao de um agendamento
+existente usa `[startAt, endAt]` puro, sem buffer.
+
+### Conflito de agenda tambem e 409, com codigo proprio
+
+A constraint `EXCLUDE` (secao "Agenda sem conflito garantida pelo banco")
+garante a exclusao; a API so precisa traduzir. O Prisma devolve `P2039`, com a
+mensagem ja traduzida e o SQLSTATE em `meta.driverAdapterError.cause.originalCode`
+(`23P01`). `ehConflitoAgenda` reconhece os dois formatos e a rota responde 409
+`SCHEDULE_CONFLICT`.
+
+### Transicoes de status validadas no dominio
+
+`APPOINTMENT_TRANSITIONS` no shared e a unica fonte de transicoes permitidas.
+`PATCH /appointments/:id/status` recusa qualquer outra com 422
+`INVALID_TRANSITION` e carimba as datas do status (`confirmedAt`, `startedAt`,
+`finishedAt`, `cancelledAt` + motivo). Cada mudanca grava uma linha em
+`AppointmentStatusHistory` na mesma transacao, preservando a trilha de auditoria.
+
+## Portal publico do cliente
+
+### O slug e o unico seletor de tenant
+
+O portal vive em `/agendar/:slug` e consome as rotas sob `/public`. Nenhuma rota
+publica recebe `clinicId`: o slug da URL resolve a clinica, e so clinicas ativas
+respondem. Um slug desconhecido devolve 404, sem revelar se ele existe em outra
+clinica -- o mesmo criterio de isolamento do resto da API.
+
+### Convidado, sem cadastro
+
+O cliente do portal nao faz login. Nome e telefone sao obrigatorios; e-mail e
+opcional. A API procura um `Client` pelo telefone normalizado (com DDI) na
+clinica e, se encontrar, reaproveita o cadastro; se nao, cria um com `userId`
+nulo e `searchText` derivado do nome. O e-mail so preenche um campo vazio e o
+consentimento de marketing nunca e desligado por um novo agendamento.
+
+### Agendamento nasce pendente
+
+O `POST /public/clinics/:slug/appointments` refaz a checagem do horario pelo
+mesmo motor de slots antes de gravar, para nao aceitar um horario fora da grade.
+A criacao usa `source: PORTAL_CLIENTE`, status `AGENDADO_PENDENTE` e um
+`AppointmentStatusHistory` na mesma transacao. Horario indisponivel responde 422
+`SLOT_UNAVAILABLE`; uma corrida real cai na constraint de exclusao e vira 409
+`SLOT_UNAVAILABLE`. A rota tem rate limit proprio (10/min).
+
+### Motor de slots compartilhado entre admin e portal
+
+A montagem dos parametros (terapia, profissional, fuso, disponibilidade e
+ocupacao) que antes vivia dentro de `/appointments/slots` foi extraida para
+`apps/api/src/lib/agenda-service.ts` (`calcularSlotsDaClinica` e `periodoUtc`).
+Admin e portal chamam a mesma funcao, entao a lista de horarios e identica nos
+dois caminhos. O web do portal tambem reusa o contrato de `slotSchema`, so
+renderizando outra etapa de UI.
+
 ## Verificacao
 
 ### A suite nunca escreve no banco de dev

@@ -24,10 +24,13 @@ import {
 
 import { env } from './config/env.js';
 import { registrarAutenticacao } from './plugins/auth.js';
+import { appointmentRoutes } from './routes/appointments.js';
 import { authRoutes } from './routes/auth.js';
+import { availabilityRoutes } from './routes/availability.js';
 import { clientRoutes } from './routes/clients.js';
 import { clinicRoutes } from './routes/clinics.js';
 import { healthRoutes } from './routes/health.js';
+import { portalRoutes } from './routes/portal.js';
 import { professionalRoutes } from './routes/professionals.js';
 import { type ReadyProbe, readyRoutes } from './routes/ready.js';
 import { therapyRoutes } from './routes/therapies.js';
@@ -211,6 +214,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<App> {
         { name: 'clients', description: 'Cadastro de clientes' },
         { name: 'therapies', description: 'Cardapio de terapias' },
         { name: 'booking', description: 'Disponibilidade e agendamento' },
+        { name: 'public', description: 'Portal publico de agendamento do cliente' },
         { name: 'records', description: 'Anamnese e prontuario' },
         { name: 'finance', description: 'Recebimentos, pacotes e relatorios' },
       ],
@@ -240,5 +244,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<App> {
   await app.register(therapyRoutes, { prefix: '/therapies' });
   await app.register(professionalRoutes, { prefix: '/professionals' });
   await app.register(clientRoutes, { prefix: '/clients' });
+  await app.register(availabilityRoutes, { prefix: '/availability' });
+  await app.register(appointmentRoutes, { prefix: '/appointments' });
+  // Publico, sem `requireAuth`. O slug do link e o unico seletor de tenant.
+  await app.register(portalRoutes, { prefix: '/public' });
   return app;
 }

@@ -104,7 +104,8 @@ O `pre-push` roda typecheck e testes. O CI roda o gate completo em cada PR.
 | 1     | Schema Prisma, migrations, seed                               | **OK**  |
 | 2     | Autenticacao e papeis (admin / profissional / cliente)        | **OK**  |
 | 3     | Cadastros: clinica, profissional, cliente, cardapio de terapias | **OK**  |
-| 4     | Agenda, disponibilidade, portal publico do cliente            | Proxima |
+| 4a    | Disponibilidade, motor de slots e agenda do admin            | **OK**  |
+| 4b    | Portal publico do cliente: escolher terapia, profissional e horario | **OK**  |
 | 5     | Notificacoes: WhatsApp + e-mail com fila                     |         |
 | 6     | Prontuario, anamnese versionada, alertas de contraindicacao   |         |
 | 7     | Financeiro: recebido, a receber, pacotes, relatorios         |         |
