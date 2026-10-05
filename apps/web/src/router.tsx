@@ -9,6 +9,7 @@ import { ClinicaPage } from '@/pages/ClinicaPage';
 import { DisponibilidadePage } from '@/pages/DisponibilidadePage';
 import { HomePage } from '@/pages/HomePage';
 import { LoginPage } from '@/pages/LoginPage';
+import { NotificacoesPage } from '@/pages/NotificacoesPage';
 import { PortalPage } from '@/pages/PortalPage';
 import { ProfissionaisPage } from '@/pages/ProfissionaisPage';
 import { TerapiasPage } from '@/pages/TerapiasPage';
@@ -54,6 +55,7 @@ export const router = createBrowserRouter([
       { path: 'terapias', element: <TerapiasPage /> },
       { path: 'profissionais', element: <ProfissionaisPage /> },
       { path: 'clientes', element: <ClientesPage /> },
+      { path: 'notificacoes', element: <NotificacoesPage /> },
       { path: 'clinica', element: <ClinicaPage /> },
     ],
   },

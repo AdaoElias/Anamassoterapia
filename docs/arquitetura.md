@@ -384,8 +384,8 @@ renderizando outra etapa de UI.
 `Notification` e o registro de auditoria *e* a fila de reenvio. O `pg-boss` mora
 no mesmo Postgres, em schema separado (`QUEUE_SCHEMA`), e serve para uma coisa so:
 entregar o id da linha a ser processada. Isso resolve o caso em que o job foi
-aceito e o processo morreu antes do envio -- a linha continua la, e a 5B
-(reenvio manual) ou a proxima passagem do worker pegam.
+aceito e o processo morreu antes do envio -- a linha continua la, e o reenvio
+manual (5b) ou a proxima passagem do worker pegam.
 
 Por isso `enfileirar` nunca derruba a requisicao que criou a reserva: sem fila no
 ar, o aviso fica `PENDENTE` e pronto. E `processarNotificacao` so muda a linha
@@ -453,6 +453,34 @@ credencial da Meta, o que importa para clinica de porte pequeno -- e o e-mail po
 SMTP via `nodemailer`. `NOTIFIER_DRIVER=email` desliga o WhatsApp de proposito
 (uso so de e-mail). Se a configuracao do transporte faltar em producao, o canal
 cai para log em vez de virar erro 500 no meio de uma reserva.
+
+### O painel le a linha; o reenvio reusa a linha
+
+`GET /notifications` lista por clinica (o tenant vem da sessao, nunca da URL) com
+filtro de situacao, canal e busca por destinatario ou nome do cliente. E `ADMIN` de
+leitura: a resposta traz telefone, e-mail e o texto da mensagem, que e dado de
+contato do cliente, nao dado de agenda que qualquer profissional precise ver.
+
+`resumo` conta a clinica inteira e ignora os filtros. E o que responde "quantos
+avisos falharam" -- se contasse so o filtro, um painel aberto em "com erro" nunca
+mostraria que existem 12 falhas escondidas atras de um filtro restrito.
+
+`POST /notifications/:id/reenviar` zera `attempts`, limpa `lastError`, `sentAt` e
+`externalId` e reagenda a linha **para agora**. Duas decisoes:
+
+- O texto enviado nao muda. A linha e a auditoria do aviso que a clinica pediu;
+  reescrever o corpo na mao quebraria a leitura de "o que o cliente recebeu". Se a
+  clinica errou o texto, a correcao e um aviso novo (reagendamento, cancelamento),
+  nao uma edicao silenciosa do passado.
+- `scheduledFor` vai para `agora` de proposito. Sem isso a linha voltaria a ser
+  adiada para a data original e o botao pareceria nao fazer nada.
+
+O reenvio usa `updateMany` filtrando `PENDENTE`, `ERRO` e `ENVIADO` -- a mesma
+trava do worker. Se ele pegou a linha entre a leitura e a escrita, o count volta
+zero e a resposta e 409 `NOTIFICATION_IN_FLIGHT`, em vez de duas mensagens para o
+mesmo cliente. `CANCELADO` responde 409 para sempre: o lembrete foi substituido por
+outro aviso, e reenviar seria mandar algo que ninguem pediu. Aviso de outra clinica
+responde 404, e nao 403: o painel nem confirma que ele existe.
 
 ## Verificacao
 
@@ -528,9 +556,8 @@ producao em autenticacao e a origem classica de bug que so aparece no deploy.
 
 ## Decisoes adiadas de proposito
 
-- **Painel de notificacoes**: a 5b entrega a tela de listagem e o reenvio manual.
-  Ela precisa do `GET /notifications` por clinica e do reenvio de uma linha em
-  `ERRO` -- a outbox ja esta gravada, falta so a superficie HTTP.
+- **Painel de notificacoes**: entregue na 5b (tela de listagem e reenvio manual);
+  o que fica adiado e o aviso por e-mail do resultado diario do worker.
 - **Worker separado**: assumido dentro do processo da API (ver acima). Escala e
   problema da Etapa 8; a fila ja suporta varios consumidores.
 - **Pagamento online**: o plano trata de "recebido x a receber" e sinal. Integrar

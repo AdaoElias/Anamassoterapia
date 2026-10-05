@@ -114,7 +114,7 @@ O `pre-push` roda typecheck e testes. O CI roda o gate completo em cada PR.
 | 4a    | Disponibilidade, motor de slots e agenda do admin            | **OK**  |
 | 4b    | Portal publico do cliente: escolher terapia, profissional e horario | **OK**  |
 | 5a    | Notificacoes no backend: outbox, fila, gatilhos e worker     | **OK**  |
-| 5b    | Tela de notificacoes e reenvio manual no painel             |         |
+| 5b    | Tela de notificacoes e reenvio manual no painel             | **OK**  |
 | 6     | Prontuario, anamnese versionada, alertas de contraindicacao   |         |
 | 7     | Financeiro: recebido, a receber, pacotes, relatorios         |         |
 | 8     | Testes ponta a ponta, LGPD, PWA, deploy                      |         |

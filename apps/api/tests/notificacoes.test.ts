@@ -602,3 +602,326 @@ describe('envio da notificacao', () => {
     expect(linha.status).toBe('ERRO');
   });
 });
+
+describe('painel de notificacoes', () => {
+  interface ItemPainel {
+    id: string;
+    clientName: string | null;
+    recipient: string;
+    status: string;
+    attempts: number;
+    lastError: string | null;
+    subject: string | null;
+    body: string;
+  }
+
+  interface ResumoPainel {
+    total: number;
+    pendente: number;
+    enviando: number;
+    enviado: number;
+    erro: number;
+    cancelado: number;
+  }
+
+  interface ListaPainel {
+    items: ItemPainel[];
+    total: number;
+    resumo: ResumoPainel;
+  }
+
+  async function criarCliente(clinicId: string, nome: string, email: string): Promise<string> {
+    const cliente = await prisma.client.create({
+      data: { clinicId, name: nome, email, phone: '5551999998888', marketingOptIn: true },
+    });
+    return cliente.id;
+  }
+
+  async function criarAviso(
+    clinicId: string,
+    dados: {
+      status?: 'PENDENTE' | 'ENVIANDO' | 'ENVIADO' | 'ERRO' | 'CANCELADO';
+      channel?: 'WHATSAPP' | 'EMAIL' | 'SMS';
+      clientId?: string;
+      recipient?: string;
+      attempts?: number;
+      lastError?: string;
+      scheduledFor?: Date;
+      criadoEm?: Date;
+    } = {},
+  ): Promise<string> {
+    const linha = await prisma.notification.create({
+      data: {
+        clinicId,
+        clientId: dados.clientId ?? null,
+        channel: dados.channel ?? 'EMAIL',
+        type: 'LEMBRETE',
+        recipient: dados.recipient ?? 'ana@teste.local',
+        subject: 'Lembrete de horario - Clinica de Teste',
+        body: 'Oi, Ana! Passando para lembrar do seu horario.',
+        status: dados.status ?? 'PENDENTE',
+        attempts: dados.attempts ?? 0,
+        lastError: dados.lastError ?? null,
+        scheduledFor: dados.scheduledFor ?? new Date(Date.now() + 3_600_000),
+        ...(dados.criadoEm === undefined ? {} : { createdAt: dados.criadoEm }),
+      },
+    });
+    criadas.push(clinicId);
+    return linha.id;
+  }
+
+  /** Usuario sem permissao de escrita: o painel tem dados de contato do cliente. */
+  async function tokenDeProfissional(app: App, cenario: Cenario): Promise<string> {
+    const email = `prof-${randomUUID()}@teste.local`;
+    const user = await prisma.user.create({
+      data: { email, passwordHash: HASH_FIXTURE, name: 'Profissional de Teste' },
+    });
+    await prisma.clinicMembership.create({
+      data: { clinicId: cenario.clinicId, userId: user.id, role: 'PROFISSIONAL' },
+    });
+
+    const login = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { email, senha: 'Senha@123' },
+    });
+    return corpoDe<{ accessToken: string }>(login).accessToken;
+  }
+
+  it('lista da clinica do usuario, com o nome do cliente e o resumo por situacao', async () => {
+    const app = await novaApp();
+    const cenario = await criarCenario(app);
+    const outro = await criarCenario(app);
+
+    const clientId = await criarCliente(cenario.clinicId, 'Ana Souza', 'ana@teste.local');
+    await criarAviso(cenario.clinicId, {
+      status: 'ERRO',
+      attempts: 3,
+      lastError: 'SMTP recusou',
+      clientId,
+      recipient: 'ana@teste.local',
+      criadoEm: new Date('2099-01-01T10:00:00.000Z'),
+    });
+    await criarAviso(cenario.clinicId, {
+      status: 'ENVIADO',
+      clientId,
+      recipient: 'ana@teste.local',
+      criadoEm: new Date('2099-01-02T10:00:00.000Z'),
+    });
+    await criarAviso(cenario.clinicId, {
+      status: 'PENDENTE',
+      clientId,
+      recipient: 'ana@teste.local',
+      criadoEm: new Date('2099-01-03T10:00:00.000Z'),
+    });
+    // A clinica vizinha nao aparece: o tenant vem da sessao, nao da URL.
+    await criarAviso(outro.clinicId);
+
+    const resposta = await app.inject({
+      method: 'GET',
+      url: '/notifications',
+      headers: comToken(cenario.token),
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    const corpo = corpoDe<ListaPainel>(resposta);
+
+    expect(corpo.total).toBe(3);
+    expect(corpo.items).toHaveLength(3);
+    expect(corpo.items.every((linha) => linha.clientName === 'Ana Souza')).toBe(true);
+    // Mais recente primeiro: o aviso que a clinica acabou de ver e o primeiro.
+    expect(corpo.items.map((linha) => linha.status)).toEqual(['PENDENTE', 'ENVIADO', 'ERRO']);
+    expect(corpo.resumo).toEqual({
+      total: 3,
+      pendente: 1,
+      enviando: 0,
+      enviado: 1,
+      erro: 1,
+      cancelado: 0,
+    });
+  });
+
+  it('filtra por situacao e busca por destinatario ou nome do cliente', async () => {
+    const app = await novaApp();
+    const cenario = await criarCenario(app);
+
+    const clientId = await criarCliente(cenario.clinicId, 'Bruno Lima', 'bruno@teste.local');
+    await criarAviso(cenario.clinicId, {
+      status: 'ERRO',
+      clientId,
+      recipient: 'bruno@teste.local',
+    });
+    await criarAviso(cenario.clinicId, {
+      status: 'ENVIADO',
+      clientId,
+      recipient: 'outro@teste.local',
+    });
+    await criarAviso(cenario.clinicId, {
+      status: 'ERRO',
+      recipient: '5551977776666',
+    });
+
+    const comFiltro = await app.inject({
+      method: 'GET',
+      url: '/notifications?status=ERRO&limit=1',
+      headers: comToken(cenario.token),
+    });
+    const corpoFiltro = corpoDe<ListaPainel>(comFiltro);
+    expect(corpoFiltro.total).toBe(2);
+    // O limite vale, mas o total da pagina continua sendo da clinic inteira.
+    expect(corpoFiltro.items).toHaveLength(1);
+    // O resumo ignora o filtro: e a contagem que diz se ha falha a tratar.
+    expect(corpoFiltro.resumo.erro).toBe(2);
+    expect(corpoFiltro.resumo.enviado).toBe(1);
+
+    const porNome = await app.inject({
+      method: 'GET',
+      url: '/notifications?search=bruno',
+      headers: comToken(cenario.token),
+    });
+    const corpoNome = corpoDe<ListaPainel>(porNome);
+    // A busca e "destinatario OU nome do cliente": os dois avisos do Bruno
+    // entram, mesmo o que foi enviado para outro endereco.
+    expect(corpoNome.total).toBe(2);
+    expect(corpoNome.items.every((linha) => linha.clientName === 'Bruno Lima')).toBe(true);
+
+    const porDestinatario = await app.inject({
+      method: 'GET',
+      url: '/notifications?search=55519777',
+      headers: comToken(cenario.token),
+    });
+    expect(corpoDe<ListaPainel>(porDestinatario).total).toBe(1);
+
+    const invalido = await app.inject({
+      method: 'GET',
+      url: '/notifications?status=SITUACAO_QUE_NAO_EXISTE',
+      headers: comToken(cenario.token),
+    });
+    expect(invalido.statusCode).toBe(422);
+    expect(corpoDe<{ error: string }>(invalido).error).toBe('VALIDATION_ERROR');
+  });
+
+  it('nao deixa quem nao e ADMIN ver o painel', async () => {
+    const app = await novaApp();
+    const cenario = await criarCenario(app);
+    await criarAviso(cenario.clinicId);
+    const token = await tokenDeProfissional(app, cenario);
+
+    const listagem = await app.inject({
+      method: 'GET',
+      url: '/notifications',
+      headers: comToken(token),
+    });
+    expect(listagem.statusCode).toBe(403);
+    expect(corpoDe<{ error: string }>(listagem).error).toBe('FORBIDDEN');
+  });
+
+  it('reenvio limpa a falha, zera as tentativas e joga para agora', async () => {
+    const app = await novaApp();
+    const cenario = await criarCenario(app);
+
+    const clientId = await criarCliente(cenario.clinicId, 'Ana Souza', 'ana@teste.local');
+    const id = await criarAviso(cenario.clinicId, {
+      status: 'ERRO',
+      clientId,
+      attempts: 3,
+      lastError: 'SMTP recusou a conexao',
+      scheduledFor: new Date(Date.now() + 86_400_000),
+    });
+    await prisma.notification.update({ where: { id }, data: { sentAt: new Date() } });
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: `/notifications/${id}/reenviar`,
+      headers: comToken(cenario.token),
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    const { notification } = corpoDe<{ notification: ItemPainel & { scheduledFor: string } }>(
+      resposta,
+    );
+    expect(notification.status).toBe('PENDENTE');
+    expect(notification.attempts).toBe(0);
+    expect(notification.lastError).toBeNull();
+    // Sem reagendar para agora o worker devolveria a linha para a data original.
+    expect(Math.abs(new Date(notification.scheduledFor).getTime() - Date.now())).toBeLessThan(
+      10_000,
+    );
+
+    const linha = await prisma.notification.findUniqueOrThrow({ where: { id } });
+    expect(linha.status).toBe('PENDENTE');
+    expect(linha.attempts).toBe(0);
+    expect(linha.lastError).toBeNull();
+    expect(linha.sentAt).toBeNull();
+    expect(linha.externalId).toBeNull();
+  });
+
+  it('reenvia tambem o aviso que o cliente diz que nao recebeu', async () => {
+    const app = await novaApp();
+    const cenario = await criarCenario(app);
+
+    const id = await criarAviso(cenario.clinicId, {
+      status: 'ENVIADO',
+      attempts: 1,
+      scheduledFor: new Date(Date.now() - 60_000),
+    });
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: `/notifications/${id}/reenviar`,
+      headers: comToken(cenario.token),
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(corpoDe<{ notification: ItemPainel }>(resposta).notification.status).toBe('PENDENTE');
+  });
+
+  it('recusa o que esta em envio, o cancelado e o que e de outra clinica', async () => {
+    const app = await novaApp();
+    const cenario = await criarCenario(app);
+    const outro = await criarCenario(app);
+
+    const emVoo = await criarAviso(cenario.clinicId, { status: 'ENVIANDO' });
+    const cancelado = await criarAviso(cenario.clinicId, { status: 'CANCELADO' });
+    const alheio = await criarAviso(outro.clinicId, { status: 'ERRO' });
+
+    const emVooResposta = await app.inject({
+      method: 'POST',
+      url: `/notifications/${emVoo}/reenviar`,
+      headers: comToken(cenario.token),
+    });
+    expect(emVooResposta.statusCode).toBe(409);
+    expect(corpoDe<{ error: string }>(emVooResposta).error).toBe('NOTIFICATION_IN_FLIGHT');
+    expect((await prisma.notification.findUniqueOrThrow({ where: { id: emVoo } })).status).toBe(
+      'ENVIANDO',
+    );
+
+    const canceladoResposta = await app.inject({
+      method: 'POST',
+      url: `/notifications/${cancelado}/reenviar`,
+      headers: comToken(cenario.token),
+    });
+    expect(canceladoResposta.statusCode).toBe(409);
+    expect(corpoDe<{ error: string }>(canceladoResposta).error).toBe('NOTIFICATION_CANCELLED');
+
+    // 404 e nao 403: o painel nem confirma que o aviso existe em outra clinica.
+    const alheioResposta = await app.inject({
+      method: 'POST',
+      url: `/notifications/${alheio}/reenviar`,
+      headers: comToken(cenario.token),
+    });
+    expect(alheioResposta.statusCode).toBe(404);
+    expect(corpoDe<{ error: string }>(alheioResposta).error).toBe('NOTIFICATION_NOT_FOUND');
+    expect((await prisma.notification.findUniqueOrThrow({ where: { id: alheio } })).status).toBe(
+      'ERRO',
+    );
+  });
+
+  it('exige sessao valida', async () => {
+    const app = await novaApp();
+    await criarCenario(app);
+
+    const listagem = await app.inject({ method: 'GET', url: '/notifications' });
+    expect(listagem.statusCode).toBe(401);
+  });
+});

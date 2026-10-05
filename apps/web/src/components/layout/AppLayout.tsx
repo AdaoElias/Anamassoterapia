@@ -12,6 +12,7 @@ const LINKS: Array<{ to: string; rotulo: string; fim: boolean }> = [
   { to: '/terapias', rotulo: 'Terapias', fim: false },
   { to: '/profissionais', rotulo: 'Profissionais', fim: false },
   { to: '/clientes', rotulo: 'Clientes', fim: false },
+  { to: '/notificacoes', rotulo: 'Notificacoes', fim: false },
   { to: '/clinica', rotulo: 'Clinica', fim: false },
 ];
 

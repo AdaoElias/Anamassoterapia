@@ -8,6 +8,7 @@ export * from './schemas/availability.js';
 export * from './schemas/client.js';
 export * from './schemas/clinic.js';
 export * from './schemas/common.js';
+export * from './schemas/notification.js';
 export * from './schemas/portal.js';
 export * from './schemas/professional.js';
 export * from './schemas/room.js';
