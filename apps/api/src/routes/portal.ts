@@ -15,6 +15,7 @@ import { z } from 'zod';
 
 import { calcularSlotsDaClinica } from '../lib/agenda-service.js';
 import { ehConflitoAgenda } from '../lib/cadastros.js';
+import { avisarNovoAgendamento } from '../lib/notificacoes/gatilhos.js';
 import { prisma } from '../lib/prisma.js';
 
 /**
@@ -376,6 +377,13 @@ export const portalRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
             professional: { select: { name: true } },
             therapy: { select: { name: true } },
           },
+        });
+
+        // A reserva ja esta de pe. Falha na preparacao do aviso nao vira 500
+        // para o cliente que acabou de agendar: o horario e dela, o e-mail e
+        // nosso.
+        await avisarNovoAgendamento(agendamento.id).catch((erro: unknown) => {
+          request.log.error({ err: erro }, 'falha ao preparar notificacoes do agendamento');
         });
 
         return reply.code(201).send({

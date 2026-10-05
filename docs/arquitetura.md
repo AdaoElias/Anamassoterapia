@@ -377,6 +377,83 @@ Admin e portal chamam a mesma funcao, entao a lista de horarios e identica nos
 dois caminhos. O web do portal tambem reusa o contrato de `slotSchema`, so
 renderizando outra etapa de UI.
 
+## Notificacoes
+
+### A outbox e a fonte de verdade; a fila so acorda o processo
+
+`Notification` e o registro de auditoria *e* a fila de reenvio. O `pg-boss` mora
+no mesmo Postgres, em schema separado (`QUEUE_SCHEMA`), e serve para uma coisa so:
+entregar o id da linha a ser processada. Isso resolve o caso em que o job foi
+aceito e o processo morreu antes do envio -- a linha continua la, e a 5B
+(reenvio manual) ou a proxima passagem do worker pegam.
+
+Por isso `enfileirar` nunca derruba a requisicao que criou a reserva: sem fila no
+ar, o aviso fica `PENDENTE` e pronto. E `processarNotificacao` so muda a linha
+com `updateMany` filtrando por status (`PENDENTE`, `ERRO`, `ENVIANDO`); quem
+mover a linha primeiro ganha. `ENVIADO` e `CANCELADO` sao resposta definitiva e
+`ENVIANDO` entra na disputa justamente porque um processo morto no meio do envio
+deixaria a linha presa para sempre.
+
+### Worker dentro do processo da API
+
+`iniciarFila` roda no `index.ts`, nunca em `buildApp()`: um worker por arquivo de
+teste seria uma conexao a mais no banco e um consumidor disputando as mesmas
+linhas antes do `expect`. A suite verifica o estado real das linhas (`PENDENTE`)
+depois que a rota grava, e exercita o envio chamando `processarNotificacao` com
+canais falsos. O fechamento e pelo `onClose` de `app.ts`.
+
+O preco de nao ter a fila na suite e que opcoes do pg-boss podem ser aceitas em
+silencio -- foi assim que `work` sobe sem a fila existir e falha semanas depois, no
+primeiro aviso. `scripts/fila-smoke.ts` cobre esse buraco: sobe a fila de verdade
+contra `TEST_DATABASE_URL`, le a configuracao de volta (`getQueue`) e espera um
+aviso sair enquanto outro espera a hora chegar.
+
+Para uma clinica, dois processos so para mandar e-mail e WhatsApp e uma peca a
+mais para operar. O preco assumido: escala e um problema da etapa 8.
+
+### Notificar depois do commit, nunca dentro da transacao
+
+Os gatilhos sao chamados depois que a transacao de status consolida, e o erro
+deles e registrado sem virar 500. Se o aviso falhasse e devolvesse erro, o painel
+mostraria "nao encontrado" para uma reserva que existe com horario travado.
+
+### Consentimento e por canal, e a regra e assimétrica
+
+Confirmacao e lembrete sao transacionais -- o cliente acabou de pedir o horario --
+e por isso nao exigem aceite de marketing; so o WhatsApp depende do consentimento
+(`Client.marketingOptIn` ou a flag `CONSENT_FLAG_WHATSAPP` do usuario
+vinculado). O e-mail vai direto. Exigir aceite para confirmar o horario que o
+proprio cliente marcou faria a agenda parecer quebrada.
+
+O telefone da clinica nao passa por consentimento: e contato comercial, nao
+mensagem de marketing. Por isso `NOVO_AGENDAMENTO` chega por WhatsApp mesmo sem
+nenhum aceite registrado.
+
+### Quem aciona o que
+
+| Gatilho                  | Cliente                          | Clinica                      |
+| ------------------------ | -------------------------------- | ---------------------------- |
+| Reserva nova (portal)    | pedido + lembrete                | aviso de novo pedido         |
+| Reserva nova (painel)    | pedido + lembrete                | nada (quem agenda ja sabe)   |
+| Confirmacao              | confirmacao                      | nada                         |
+| Cancelamento             | cancelamento; lembrete vira `CANCELADO` | nada                 |
+| Reagendamento            | reagendamento; lembrete trocado  | nada                         |
+| Volta para pendente      | rearmar lembrete                 | nada                         |
+
+`dedupeKey` e a rede contra aviso repetido. Confirmacao e cancelamento usam
+`TIPO:id:canal:marca` onde a marca e o proprio evento; o lembrete usa o
+`startAt` em ISO, porque reagendar precisa de um lembrete *novo* para a data nova
+-- e o antigo sai como `CANCELADO`, sem ser apagado.
+
+### Transporte por ambiente, decisao de canal por clinica
+
+Em dev nada sai do processo (`NOTIFIER_DRIVER=log`, `EMAIL_PROVIDER=log`). Em
+producao o WhatsApp vai pela Evolution API -- a unica opcao que nao exige
+credencial da Meta, o que importa para clinica de porte pequeno -- e o e-mail por
+SMTP via `nodemailer`. `NOTIFIER_DRIVER=email` desliga o WhatsApp de proposito
+(uso so de e-mail). Se a configuracao do transporte faltar em producao, o canal
+cai para log em vez de virar erro 500 no meio de uma reserva.
+
 ## Verificacao
 
 ### A suite nunca escreve no banco de dev
@@ -451,6 +528,11 @@ producao em autenticacao e a origem classica de bug que so aparece no deploy.
 
 ## Decisoes adiadas de proposito
 
+- **Painel de notificacoes**: a 5b entrega a tela de listagem e o reenvio manual.
+  Ela precisa do `GET /notifications` por clinica e do reenvio de uma linha em
+  `ERRO` -- a outbox ja esta gravada, falta so a superficie HTTP.
+- **Worker separado**: assumido dentro do processo da API (ver acima). Escala e
+  problema da Etapa 8; a fila ja suporta varios consumidores.
 - **Pagamento online**: o plano trata de "recebido x a receber" e sinal. Integrar
   gateway de pagamento e da Etapa 8, com decisao sobre o provedor.
 - **IA de recomendacao**: existe nos concorrentes, mas depende de historico de

@@ -16,6 +16,13 @@ import { z } from 'zod';
 import type { Prisma } from '../generated/prisma/client.js';
 import { calcularSlotsDaClinica, periodoUtc } from '../lib/agenda-service.js';
 import { ehConflitoAgenda } from '../lib/cadastros.js';
+import {
+  avisarCancelamento,
+  avisarConfirmacao,
+  avisarNovoAgendamento,
+  avisarReagendamento,
+  rearmarLembrete,
+} from '../lib/notificacoes/gatilhos.js';
 import { prisma } from '../lib/prisma.js';
 
 /**
@@ -316,6 +323,13 @@ export const appointmentRoutes: FastifyPluginCallbackZod = (app, _options, done)
           include: incluirRelacoes,
         });
 
+        // A sessao ja esta criada: se a preparacao do aviso falhar, a
+        // resposta continua 201. Devolver erro aqui diria ao painel que a
+        // reserva nao existe -- e ela existe, com horario travado.
+        await avisarNovoAgendamento(agendamento.id).catch((erro: unknown) => {
+          request.log.error({ err: erro }, 'falha ao preparar notificacoes da nova sessao');
+        });
+
         return reply.code(201).send(resposta(agendamento));
       } catch (error) {
         if (ehConflitoAgenda(error)) {
@@ -426,6 +440,11 @@ export const appointmentRoutes: FastifyPluginCallbackZod = (app, _options, done)
       const notes =
         corpo.notes === undefined ? atual.notes : corpo.notes === '' ? null : corpo.notes;
 
+      // So interessa avisar quando o horario realmente mudou. Trocar
+      // profissional ou terapia no mesmo horario nao e reagendamento, e o
+      // cliente nao precisa receber um aviso por isso.
+      const mudouHorario = startAt.getTime() !== atual.startAt.getTime();
+
       try {
         const agendamento = await prisma.appointment.update({
           where: { id },
@@ -440,6 +459,12 @@ export const appointmentRoutes: FastifyPluginCallbackZod = (app, _options, done)
           },
           include: incluirRelacoes,
         });
+
+        if (mudouHorario) {
+          await avisarReagendamento(id, atual.startAt).catch((erro: unknown) => {
+            request.log.error({ err: erro }, 'falha ao preparar notificacoes do reagendamento');
+          });
+        }
 
         return reply.code(200).send(resposta(agendamento));
       } catch (error) {
@@ -543,6 +568,23 @@ export const appointmentRoutes: FastifyPluginCallbackZod = (app, _options, done)
             .code(404)
             .send({ error: 'APPOINTMENT_NOT_FOUND', message: 'Sessao nao encontrada.' });
         }
+
+        // A transacao acima ja consolidou o status; os avisos vem depois.
+        // Cada destino tem consequencia diferente para o cliente: confirmar
+        // avisa que deu certo, cancelar avisa e aposenta o lembrete, voltar
+        // para pendente so precisa rearmar o lembrete. Os demais status
+        // (em atendimento, concluido, no-show) nao geram aviso.
+        const gatilhos = {
+          CONFIRMADO: avisarConfirmacao,
+          CANCELADO: avisarCancelamento,
+          AGENDADO_PENDENTE: rearmarLembrete,
+        } as const;
+
+        await (gatilhos[corpo.status as keyof typeof gatilhos]?.(id) ?? Promise.resolve()).catch(
+          (erro: unknown) => {
+            request.log.error({ err: erro }, 'falha ao preparar notificacoes da mudanca de status');
+          },
+        );
 
         return reply.code(200).send(resposta(atualizado));
       } catch (error) {

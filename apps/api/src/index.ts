@@ -1,8 +1,19 @@
 import { buildApp } from './app.js';
 import { env } from './config/env.js';
+import { iniciarFila } from './lib/notificacoes/fila.js';
 
 async function main(): Promise<void> {
   const app = await buildApp();
+
+  // A fila sobe aqui, e nao em `buildApp()`: um worker por processo de teste
+  // seria uma conexao a mais no banco e um consumidor disputando as mesmas
+  // linhas. Se a fila nao subir, a API continua no ar -- a outbox guarda o
+  // que ficou para tras e o aviso aparece no painel.
+  try {
+    await iniciarFila(app.log);
+  } catch (error) {
+    app.log.error({ err: error }, 'fila de notificacoes nao subiu; avisos ficarao pendentes');
+  }
 
   try {
     await app.listen({ host: env.API_HOST, port: env.API_PORT });

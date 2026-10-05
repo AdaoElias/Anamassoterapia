@@ -23,6 +23,7 @@ import {
 } from 'fastify-type-provider-zod';
 
 import { env } from './config/env.js';
+import { pararFila } from './lib/notificacoes/fila.js';
 import { registrarAutenticacao } from './plugins/auth.js';
 import { appointmentRoutes } from './routes/appointments.js';
 import { authRoutes } from './routes/auth.js';
@@ -248,5 +249,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<App> {
   await app.register(appointmentRoutes, { prefix: '/appointments' });
   // Publico, sem `requireAuth`. O slug do link e o unico seletor de tenant.
   await app.register(portalRoutes, { prefix: '/public' });
+
+  // Contrapartida do `iniciarFila` de `index.ts`: o worker fecha junto com o
+  // servidor, antes do processo morrer. Nos testes isso e no-op, porque a
+  // fila nunca sobe dentro de `buildApp()`.
+  app.addHook('onClose', async () => {
+    await pararFila();
+  });
+
   return app;
 }

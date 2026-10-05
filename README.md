@@ -75,6 +75,13 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 | `pnpm db:seed`         | Dados de demonstracao                                 |
 | `pnpm db:studio`       | Prisma Studio para inspecionar o banco               |
 
+Verificacoes manuais, fora da suite (precisam do Postgres local):
+
+| Script                                              | O que faz                                                  |
+| --------------------------------------------------- | ---------------------------------------------------------- |
+| `pnpm --filter @massoterapia/api exec tsx scripts/verify-constraints.ts` | Confere as garantias do banco com SQL de verdade |
+| `pnpm --filter @massoterapia/api exec tsx scripts/fila-smoke.ts`          | Sobe a fila do pg-boss e confirma que um aviso sai e outro espera a hora |
+
 Documentacao interativa da API: <http://localhost:3333/docs>
 
 ## Estrutura
@@ -106,7 +113,8 @@ O `pre-push` roda typecheck e testes. O CI roda o gate completo em cada PR.
 | 3     | Cadastros: clinica, profissional, cliente, cardapio de terapias | **OK**  |
 | 4a    | Disponibilidade, motor de slots e agenda do admin            | **OK**  |
 | 4b    | Portal publico do cliente: escolher terapia, profissional e horario | **OK**  |
-| 5     | Notificacoes: WhatsApp + e-mail com fila                     |         |
+| 5a    | Notificacoes no backend: outbox, fila, gatilhos e worker     | **OK**  |
+| 5b    | Tela de notificacoes e reenvio manual no painel             |         |
 | 6     | Prontuario, anamnese versionada, alertas de contraindicacao   |         |
 | 7     | Financeiro: recebido, a receber, pacotes, relatorios         |         |
 | 8     | Testes ponta a ponta, LGPD, PWA, deploy                      |         |

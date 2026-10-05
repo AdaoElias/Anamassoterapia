@@ -41,9 +41,24 @@ const envSchema = z
     EMAIL_PROVIDER: z.enum(['log', 'smtp']).default('log'),
     EMAIL_FROM: z.string().default('Massoterapia <nao-responda@localhost>'),
 
+    EMAIL_SMTP_HOST: z.string().optional(),
+    EMAIL_SMTP_PORT: z.coerce.number().int().min(1).max(65_535).default(587),
+    EMAIL_SMTP_SECURE: booleanish,
+    EMAIL_SMTP_USER: z.string().optional(),
+    EMAIL_SMTP_PASSWORD: z.string().optional(),
+
     EVOLUTION_API_URL: z.url().optional(),
     EVOLUTION_API_KEY: z.string().optional(),
     EVOLUTION_INSTANCE_NAME: z.string().default('massoterapia'),
+
+    /// Schema da fila do pg-boss. Fica separado do schema da aplicacao para
+    /// que `prisma migrate reset` nao leve as tabelas de job junto.
+    QUEUE_SCHEMA: z.string().min(1).default('pgboss'),
+    /// Pool proprio do worker. O pool do Prisma (10) ja cobre o trafego HTTP.
+    QUEUE_POOL_MAX: z.coerce.number().int().min(1).max(20).default(5),
+    /// Intervalo de sondagem da fila. Baixo porque a clinica e pequena e o
+    /// aviso de lembrete tem prazo de horas, nao de segundos.
+    QUEUE_POLL_SECONDS: z.coerce.number().int().min(1).max(60).default(5),
 
     DEFAULT_APPOINTMENT_MINUTES: z.coerce.number().int().min(5).max(480).default(60),
     BOOKING_LEAD_TIME_MINUTES: z.coerce.number().int().min(0).default(120),
@@ -79,6 +94,14 @@ const envSchema = z
           message: 'EVOLUTION_API_KEY e obrigatoria quando NOTIFIER_DRIVER=evolution',
         });
       }
+    }
+
+    if (value.EMAIL_PROVIDER === 'smtp' && !value.EMAIL_SMTP_HOST) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['EMAIL_SMTP_HOST'],
+        message: 'EMAIL_SMTP_HOST e obrigatoria quando EMAIL_PROVIDER=smtp',
+      });
     }
 
     if (value.SLOT_GRANULARITY_MINUTES > value.DEFAULT_APPOINTMENT_MINUTES) {

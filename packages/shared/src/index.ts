@@ -1,5 +1,7 @@
 export * from './domain/appointment-status.js';
+export * from './domain/consent.js';
 export * from './domain/financial.js';
+export * from './domain/notification.js';
 export * from './domain/roles.js';
 export * from './schemas/appointment.js';
 export * from './schemas/availability.js';
