@@ -82,3 +82,41 @@ export const FINANCIAL_ENTRY_STATUS_LABELS: Record<FinancialEntryStatus, string>
 export const FINANCIAL_ENTRY_KINDS = ['RECEITA', 'DESPESA', 'COMISSAO'] as const;
 
 export type FinancialEntryKind = (typeof FINANCIAL_ENTRY_KINDS)[number];
+
+export const PACKAGE_STATUSES = ['ATIVO', 'CONCLUIDO', 'CANCELADO', 'EXPIRADO'] as const;
+
+export type PackageStatus = (typeof PACKAGE_STATUSES)[number];
+
+export const PACKAGE_STATUS_LABELS: Record<PackageStatus, string> = {
+  ATIVO: 'Ativo',
+  CONCLUIDO: 'Concluido',
+  CANCELADO: 'Cancelado',
+  EXPIRADO: 'Expirado',
+};
+
+export const PACKAGE_SESSION_STATUSES = [
+  'DISPONIVEL',
+  'UTILIZADA',
+  'CANCELADA',
+  'EXPIRADA',
+] as const;
+
+export type PackageSessionStatus = (typeof PACKAGE_SESSION_STATUSES)[number];
+
+export const PACKAGE_SESSION_STATUS_LABELS: Record<PackageSessionStatus, string> = {
+  DISPONIVEL: 'Disponivel',
+  UTILIZADA: 'Utilizada',
+  CANCELADA: 'Cancelada',
+  EXPIRADA: 'Expirada',
+};
+
+export const COMMISSION_STATUSES = ['PREVISTA', 'APROVADA', 'PAGA', 'CANCELADA'] as const;
+
+export type CommissionStatus = (typeof COMMISSION_STATUSES)[number];
+
+export const COMMISSION_STATUS_LABELS: Record<CommissionStatus, string> = {
+  PREVISTA: 'Prevista',
+  APROVADA: 'Aprovada',
+  PAGA: 'Paga',
+  CANCELADA: 'Cancelada',
+};

@@ -157,6 +157,14 @@ async function notificacoes(appointmentId: string) {
   return prisma.notification.findMany({ where: { appointmentId }, orderBy: { createdAt: 'asc' } });
 }
 
+/**
+ * Avisos da equipe sobre prontuario nao sao mensagem do cliente: vao para o
+ * telefone e o e-mail da clinica e para o painel do profissional.
+ */
+function ehAvisoInterno(tipo: string): boolean {
+  return tipo === 'ANAMNESE_PENDENTE' || tipo === 'ALERTA_CONTRAINDICACAO';
+}
+
 function resumo(appointmentId: string): Promise<string[]> {
   return notificacoes(appointmentId).then((linhas) =>
     linhas.map((linha) => `${linha.type}:${linha.channel}:${linha.status}`),
@@ -249,7 +257,9 @@ describe('gatilhos de agenda', () => {
     const linhas = await notificacoes(appointmentId);
 
     // Cliente: pedido recebido + lembrete, nos dois canais (aceitou WhatsApp).
-    const doCliente = linhas.filter((linha) => linha.type !== 'NOVO_AGENDAMENTO');
+    const doCliente = linhas.filter(
+      (linha) => linha.type !== 'NOVO_AGENDAMENTO' && !ehAvisoInterno(linha.type),
+    );
     expect(doCliente.map((l) => `${l.type}:${l.channel}`).sort()).toEqual([
       'CONFIRMACAO_AGENDAMENTO:EMAIL',
       'CONFIRMACAO_AGENDAMENTO:WHATSAPP',
@@ -285,7 +295,7 @@ describe('gatilhos de agenda', () => {
     // O consentimento e do cliente. A clinica continua recebendo por WhatsApp:
     // o telefone dela e o contato comercial, nao uma mensagem de marketing.
     const doCliente = (await notificacoes(appointmentId)).filter(
-      (linha) => linha.type !== 'NOVO_AGENDAMENTO',
+      (linha) => linha.type !== 'NOVO_AGENDAMENTO' && !ehAvisoInterno(linha.type),
     );
     expect(doCliente.map((linha) => linha.channel)).not.toContain('WHATSAPP');
     expect(doCliente.map((linha) => linha.channel)).toContain('EMAIL');

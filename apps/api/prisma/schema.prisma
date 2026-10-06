@@ -205,8 +205,9 @@ model Clinic {
   appointmentHistory        AppointmentStatusHistory[]
   anamnesisTemplates        AnamnesisTemplate[]
   therapyAnamnesisTemplates TherapyAnamnesisTemplate[]
-  anamneses                 Anamnesis[]
-  appointmentAnamneses      AppointmentAnamnesis[]
+anamneses                Anamnesis[]
+    appointmentAnamneses      AppointmentAnamnesis[]
+    anamnesisInvites          AnamnesisInvite[]
   contraindications         Contraindication[]
   therapyContraindications  TherapyContraindication[]
   clientConditions          ClientContraindication[]
@@ -248,6 +249,7 @@ model User {
   createdAppointments     Appointment[]              @relation("AppointmentCreatedBy")
   changedStatuses         AppointmentStatusHistory[]
   reviewedAnamneses       Anamnesis[]
+  createdAnamnesisInvites AnamnesisInvite[]
   acknowledgedAlerts      ContraindicationAlert[]    @relation("AlertAcknowledgedBy")
   createdConditions       ClientContraindication[]
   createdFinancialEntries FinancialEntry[]
@@ -400,6 +402,7 @@ model Client {
   user             User?                    @relation(fields: [userId], references: [id], onDelete: SetNull)
   appointments     Appointment[]
   anamneses        Anamnesis[]
+  anamnesisInvites AnamnesisInvite[]
   conditions       ClientContraindication[]
   packages         Package[]
   financialEntries FinancialEntry[]
@@ -672,6 +675,7 @@ model AnamnesisTemplate {
   clinic    Clinic                     @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   therapies TherapyAnamnesisTemplate[]
   anamneses Anamnesis[]
+  invites   AnamnesisInvite[]
 
   @@unique([clinicId, name, version])
   @@index([clinicId, isActive])
@@ -722,11 +726,46 @@ model Anamnesis {
   template   AnamnesisTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
   reviewedBy User?                  @relation(fields: [reviewedByUserId], references: [id], onDelete: SetNull)
   usedIn     AppointmentAnamnesis[]
+  invite     AnamnesisInvite?
 
   @@unique([clinicId, clientId, version])
   @@index([clinicId, status])
   @@index([clientId, version])
   @@map("anamneses")
+}
+
+/// Convite para o cliente responder a anamnese sem login.
+///
+/// O token em claro so aparece na resposta da API que o cria e no link enviado
+/// ao cliente; aqui so fica o SHA-256. Um convite "vale" uma anamnese: enquanto
+/// `usedAt` e nulo ele continua abrivel (para o cliente retomar o rascunho),
+/// mas so um envio o consome.
+model AnamnesisInvite {
+  id          String   @id @default(uuid()) @db.Uuid
+  clinicId    String   @map("clinic_id") @db.Uuid
+  clientId    String   @map("client_id") @db.Uuid
+  templateId  String   @map("template_id") @db.Uuid
+  /// SHA-256 do token. Unico: e o indice do unico acesso publico a anamnese.
+  tokenHash   String   @unique @map("token_hash") @db.Char(64)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(6)
+  /// Rascunho criado na primeira abertura. As respostas do link vivem nele, e
+  /// nao em uma tabela separada: assim o link nao tem segunda fonte de dados
+  /// para divergir da anamnese que a clinica vai revisar.
+  anamnesisId String?  @unique @map("anamnesis_id") @db.Uuid
+  usedAt      DateTime? @map("used_at") @db.Timestamptz(6)
+
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  clinic    Clinic             @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  client    Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  template  AnamnesisTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  anamnesis Anamnesis?         @relation(fields: [anamnesisId], references: [id], onDelete: Cascade)
+  createdBy User?              @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, usedAt])
+  @@index([clinicId, expiresAt])
+  @@map("anamnesis_invites")
 }
 
 /// Qual versao da anamnese foi usada na sessao. Congela a prova:

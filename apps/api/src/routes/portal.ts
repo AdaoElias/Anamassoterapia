@@ -14,6 +14,7 @@ import type { FastifyPluginCallbackZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
 import { calcularSlotsDaClinica } from '../lib/agenda-service.js';
+import { avaliarSessao } from '../lib/anamneses/alertas.js';
 import { ehConflitoAgenda } from '../lib/cadastros.js';
 import { avisarNovoAgendamento } from '../lib/notificacoes/gatilhos.js';
 import { prisma } from '../lib/prisma.js';
@@ -384,6 +385,13 @@ export const portalRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
         // nosso.
         await avisarNovoAgendamento(agendamento.id).catch((erro: unknown) => {
           request.log.error({ err: erro }, 'falha ao preparar notificacoes do agendamento');
+        });
+
+        // O agendamento pelo portal e o caminho em que a contraindicacao do
+        // cliente novo costuma aparecer pela primeira vez. A avaliacao
+        // alimenta a equipe, nunca a resposta ao cliente.
+        await avaliarSessao(agendamento.id).catch((erro: unknown) => {
+          request.log.error({ err: erro }, 'falha ao avaliar contraindicacoes do agendamento');
         });
 
         return reply.code(201).send({

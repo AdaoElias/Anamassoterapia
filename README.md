@@ -6,7 +6,7 @@ Plataforma de gestao e agendamento online para clinicas de massoterapia.
   terapia e horario, e recebe confirmacao por WhatsApp e e-mail.
 - **Profissional** cadastra-se com registro profissional, declara as terapias que
   domina, define disponibilidade e acessa o **prontuario completo do cliente**
-  (anamnese versionada + evolucao por sessao).
+  (anamnese versionada e cifrada + contraindicacoes com alerta, sem bloqueio).
 - **Administrador** mantem o cardapio de terapias, a equipe e o financeiro
   (recebido x a receber, pacotes e comissoes).
 
@@ -115,6 +115,7 @@ O `pre-push` roda typecheck e testes. O CI roda o gate completo em cada PR.
 | 4b    | Portal publico do cliente: escolher terapia, profissional e horario | **OK**  |
 | 5a    | Notificacoes no backend: outbox, fila, gatilhos e worker     | **OK**  |
 | 5b    | Tela de notificacoes e reenvio manual no painel             | **OK**  |
-| 6     | Prontuario, anamnese versionada, alertas de contraindicacao   |         |
-| 7     | Financeiro: recebido, a receber, pacotes, relatorios         |         |
+| 6a    | Prontuario, anamnese versionada e alertas (API)               | **OK**  |
+| 6b    | Tela de prontuario e formulario de anamnese do cliente        | **OK**  |
+| 7     | Financeiro: recebido, a receber, pacotes, comissoes, relatorios | **OK**  |
 | 8     | Testes ponta a ponta, LGPD, PWA, deploy                      |         |

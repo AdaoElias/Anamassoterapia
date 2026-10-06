@@ -15,6 +15,7 @@ import { z } from 'zod';
 
 import type { Prisma } from '../generated/prisma/client.js';
 import { calcularSlotsDaClinica, periodoUtc } from '../lib/agenda-service.js';
+import { avaliarSessao, vincularAnamnese } from '../lib/anamneses/alertas.js';
 import { ehConflitoAgenda } from '../lib/cadastros.js';
 import {
   avisarCancelamento,
@@ -330,6 +331,13 @@ export const appointmentRoutes: FastifyPluginCallbackZod = (app, _options, done)
           request.log.error({ err: erro }, 'falha ao preparar notificacoes da nova sessao');
         });
 
+        // Mesmo contrato: a avaliacao clinica e aviso, e falha nela nao
+        // desfaz agendamento. E ela roda depois do aviso, para que uma
+        // contraindicacao apareca na mesma tela, e nao atras de um envio.
+        await avaliarSessao(agendamento.id).catch((erro: unknown) => {
+          request.log.error({ err: erro }, 'falha ao avaliar contraindicacoes da nova sessao');
+        });
+
         return reply.code(201).send(resposta(agendamento));
       } catch (error) {
         if (ehConflitoAgenda(error)) {
@@ -578,6 +586,11 @@ export const appointmentRoutes: FastifyPluginCallbackZod = (app, _options, done)
           CONFIRMADO: avisarConfirmacao,
           CANCELADO: avisarCancelamento,
           AGENDADO_PENDENTE: rearmarLembrete,
+          // Entrar em atendimento e o momento em que o profissional le o
+          // prontuario: e aqui que a versao da anamnese fica congelada para
+          // esta sessao. Sem isso, um prontuario reescrito depois mudaria o
+          // que o profissional "viu" no dia.
+          EM_ATENDIMENTO: vincularAnamnese,
         } as const;
 
         await (gatilhos[corpo.status as keyof typeof gatilhos]?.(id) ?? Promise.resolve()).catch(

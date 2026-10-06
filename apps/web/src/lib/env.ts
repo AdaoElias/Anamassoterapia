@@ -5,4 +5,5 @@
 export const env = {
   VITE_API_URL: import.meta.env.VITE_API_URL ?? '/api',
   VITE_APP_NAME: import.meta.env.VITE_APP_NAME ?? 'Massoterapia',
+  VITE_WEB_URL: import.meta.env.VITE_WEB_URL ?? 'http://localhost:5173',
 } as const;

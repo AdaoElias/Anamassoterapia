@@ -23,17 +23,23 @@ import {
 } from 'fastify-type-provider-zod';
 
 import { env } from './config/env.js';
+import { ehErroDominio } from './lib/dominio-erros.js';
 import { pararFila } from './lib/notificacoes/fila.js';
 import { registrarAutenticacao } from './plugins/auth.js';
+import { anamnesisRoutes } from './routes/anamneses.js';
+import { anamnesisPublicRoutes } from './routes/anamneses-publicas.js';
 import { appointmentRoutes } from './routes/appointments.js';
 import { authRoutes } from './routes/auth.js';
 import { availabilityRoutes } from './routes/availability.js';
 import { clientRoutes } from './routes/clients.js';
 import { clinicRoutes } from './routes/clinics.js';
+import { contraindicationRoutes } from './routes/contraindications.js';
+import { financeiroRoutes } from './routes/financeiro.js';
 import { healthRoutes } from './routes/health.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { portalRoutes } from './routes/portal.js';
 import { professionalRoutes } from './routes/professionals.js';
+import { prontuarioRoutes } from './routes/prontuario.js';
 import { type ReadyProbe, readyRoutes } from './routes/ready.js';
 import { therapyRoutes } from './routes/therapies.js';
 
@@ -167,6 +173,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<App> {
       });
     }
 
+    // Erro de dominio tem status e codigo ja decididos pelo servico (por
+    // exemplo "a clinica nao cadastrou formulario de anamnese"). Traduzido
+    // aqui para que nenhuma rota precise de try/catch so para devolver 422.
+    if (ehErroDominio(error)) {
+      request.log.warn({ codigo: error.codigo, status: error.status }, 'regra de dominio');
+      return reply.code(error.status).send({
+        error: error.codigo,
+        message: error.message,
+        requestId: request.id,
+      });
+    }
+
     const statusCode = error.statusCode ?? 500;
 
     if (statusCode >= 500) {
@@ -250,6 +268,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<App> {
   await app.register(availabilityRoutes, { prefix: '/availability' });
   await app.register(appointmentRoutes, { prefix: '/appointments' });
   await app.register(notificationRoutes, { prefix: '/notifications' });
+  await app.register(anamnesisRoutes, { prefix: '/anamnesis' });
+  await app.register(anamnesisPublicRoutes, { prefix: '/public/anamneses' });
+  await app.register(contraindicationRoutes, { prefix: '/contraindications' });
+  await app.register(prontuarioRoutes, { prefix: '/prontuarios' });
+  await app.register(financeiroRoutes, { prefix: '/finance' });
   // Publico, sem `requireAuth`. O slug do link e o unico seletor de tenant.
   await app.register(portalRoutes, { prefix: '/public' });
 

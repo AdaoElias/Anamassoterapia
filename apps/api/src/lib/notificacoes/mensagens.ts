@@ -30,6 +30,11 @@ export interface ContextoSessao {
   inicio: Date;
   motivo?: CancellationReason | null;
   inicioAnterior?: Date | null;
+  /**
+   * Linha que explica o aviso quando o tipo nao se explica sozinho: a
+   * condicao de saude no alerta, o que falta na anamnese pendente.
+   */
+  detalhe?: string | null;
 }
 
 export interface MensagemPronta {
@@ -55,9 +60,9 @@ function sessaoResumo(contexto: ContextoSessao): string {
 }
 
 /**
- * Tipos que existem no enum mas so ganham texto proprio depois -- anamnese e
- * financeiro chegam nas Etapas 6 e 7. A linha do registro ja existe; o texto e
- * o aviso generico, e o registro fica honesto sobre isso.
+ * Tipos que existem no enum mas so ganham texto proprio depois -- financeiro
+ * chega na Etapa 7. A linha do registro ja existe; o texto e o aviso
+ * generico, e o registro fica honesto sobre isso.
  */
 function corpoDeEtapaFutura(contexto: ContextoSessao): string {
   const nome = contexto.cliente.split(' ')[0] ?? contexto.cliente;
@@ -126,8 +131,22 @@ function corpoDe(tipo: NotificationType, contexto: ContextoSessao): string {
       );
 
     case 'ANAMNESE_PENDENTE':
-    case 'LEMBRETE_ANAMNESE':
+      return (
+        `Anamnese pendente para ${contexto.cliente} na ${contexto.clinica}.\n\n` +
+        `${sessaoResumo(contexto)}\n\n` +
+        `${contexto.detalhe ?? 'Esta terapia exige anamnese aprovada e o cliente ainda nao tem uma.'}\n\n` +
+        `Solicite a resposta antes do atendimento.`
+      );
+
     case 'ALERTA_CONTRAINDICACAO':
+      return (
+        `Alerta de contraindicacao em ${contexto.terapia} para ${contexto.cliente}.\n\n` +
+        `${sessaoResumo(contexto)}\n` +
+        `${contexto.detalhe === undefined || contexto.detalhe === null ? '' : `Condicao: ${contexto.detalhe}\n`}\n` +
+        `O sistema apenas avisa: avalie com o cliente e registre a decisao no prontuario.`
+      );
+
+    case 'LEMBRETE_ANAMNESE':
     case 'PAGAMENTO_PENDENTE':
     case 'PAGAMENTO_RECEBIDO':
       return corpoDeEtapaFutura(contexto);
@@ -149,8 +168,10 @@ function assuntoDe(tipo: NotificationType, contexto: ContextoSessao): string {
     case 'NOVO_AGENDAMENTO':
       return `Novo agendamento - ${contexto.clinica}`;
     case 'ANAMNESE_PENDENTE':
-    case 'LEMBRETE_ANAMNESE':
+      return `Anamnese pendente - ${contexto.clinica}`;
     case 'ALERTA_CONTRAINDICACAO':
+      return `Alerta de contraindicacao - ${contexto.clinica}`;
+    case 'LEMBRETE_ANAMNESE':
     case 'PAGAMENTO_PENDENTE':
     case 'PAGAMENTO_RECEBIDO':
       return `Aviso da ${contexto.clinica}`;

@@ -12,6 +12,11 @@ const LINKS: Array<{ to: string; rotulo: string; fim: boolean }> = [
   { to: '/terapias', rotulo: 'Terapias', fim: false },
   { to: '/profissionais', rotulo: 'Profissionais', fim: false },
   { to: '/clientes', rotulo: 'Clientes', fim: false },
+  // O prontuario nao entra no menu: ele sempre tem um cliente na URL, e o
+  // caminho para ele e a lista de clientes.
+  { to: '/formularios', rotulo: 'Formularios', fim: false },
+  { to: '/contraindicacoes', rotulo: 'Contraindicacoes', fim: false },
+  { to: '/financeiro', rotulo: 'Financeiro', fim: false },
   { to: '/notificacoes', rotulo: 'Notificacoes', fim: false },
   { to: '/clinica', rotulo: 'Clinica', fim: false },
 ];

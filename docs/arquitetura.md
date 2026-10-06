@@ -187,6 +187,65 @@ comum e tiraria o profissional do loop.
 A justificativa fica registrada, o que serve tanto para protecao do profissional
 quanto para o cliente.
 
+### A severidade vem do catalogo quando a condicao vem do catalogo
+
+`TherapyContraindication` e o catalogo de contraindicacoes da clinica, com
+`severity` e `requiresMedicalClearance`. A condicao do cliente
+(`ClientContraindication`) pode nascer de uma entrada desse catalogo ou ser
+registrada avulsa por profissional.
+
+Duas situacoes, e elas nao podem ser tratadas igual:
+
+- **Do catalogo**: severidade e exigencia de atestado sao herdadas. O cliente
+  pode ser mais grave que o padrao, nunca menos -- por isso a rota faz
+  `corpo.severity ?? doCatalogo.severity`, e nao o contrario. Registrar
+  "gestante" copiando o texto do catalogo e um arranjo que diverge na primeira
+  edicao.
+- **Avulsa**: nao existe fonte para herdar, entao a rota aplica o padrao
+  (`MEDIA`, atestado nao exigido) quando o corpo nao informa. Por isso
+  `severity` e opcional no schema e o `default` fica na rota: um default no
+  schema transformaria "nao informado" em "informado como medio" e a heranca do
+  catalogo nunca aconteceria.
+
+O alerta usa o valor mais severo entre condicao e vinculo com a terapia: o
+`severity` do vinculo e o ajuste especifico daquela terapia.
+
+### A versao da anamnese congela quando o atendimento comeca
+
+`AppointmentAnamnesis` amarra a sessao a versao da anamnese vigente no momento em
+que o status vira `EM_ATENDIMENTO`.
+
+Sem esse vinculo, o prontuario exibido durante a sessao depende de *quando* a
+tela foi aberta: o cliente responde a versao 3 as 10h, o profissional ve a
+versao 3, e a versao 2 -- que e a que estava aprovada no dia da sessao -- deixa de
+existir para fins de atendimento. O registro precisa responder "o que o
+profissional viu naquela mesa", e o unico instante que define isso e o inicio do
+atendimento.
+
+O registro e gravado no gatilho de status, depois do commit da transacao, com
+`upsert`: repetir a chamada nao duplica e nao quebra se ja houver vinculo.
+
+### Avaliacao no agendamento e aviso, nunca impedimento
+
+Ao criar uma sessao, em qualquer origem (painel ou portal), a avaliacao cruza as
+condicoes ativas do cliente com as contraindicacoes da terapia e:
+
+- cria um alerta por combinacao, com deduplicacao por sessao e condicao -- o
+  mesmo par nao vira dois alertas se a avaliacao rodar duas vezes;
+- cria aviso de anamnese pendente quando a terapia exige anamnese e nao ha versao
+  aprovada.
+
+Nenhum dos dois bloqueia a reserva. A agenda e da clinica; o que nao pode
+acontecer e atendimento sem o documento, e a solucao para isso e o aviso -- nao
+recusar o cliente que acabou de marcar.
+
+Ambos vao para a outbox com `dedupeKey` no formato
+`TIPO:id_da_sessao:canal:digest_do_destinatario`. O destinatario entra na chave
+como SHA-256 truncado porque clinica e profissional podem receber no mesmo canal
+(`EMAIL`) e cada um precisa da sua linha -- sem isso o `upsert` faria o segundo
+destinatario perder o aviso. O endereco em claro fica em `recipient`, que ja e
+dado de contato autorizado; a chave indexada nao repete dado pessoal.
+
 ## Autenticacao
 
 ### Senha: Argon2id, um unico caminho
@@ -377,6 +436,55 @@ Admin e portal chamam a mesma funcao, entao a lista de horarios e identica nos
 dois caminhos. O web do portal tambem reusa o contrato de `slotSchema`, so
 renderizando outra etapa de UI.
 
+## Anamnese respondida pelo cliente
+
+Vive em `/anamnese/:token` e consome as rotas sob `/public/anamneses`. Sem sessao,
+so que para manter a regra do portal: **rota publica nao recebe `clientId`**.
+
+### O token e a credencial, e o banco guarda so o hash
+
+A clinica gera o link em `POST /anamnesis/clientes/:clientId/convites`; a resposta
+e a unica vez que o token em claro aparece. O banco persiste o SHA-256, entao a
+listagem (`GET` no mesmo caminho) mostra template e situacao, nunca o link. Link
+perdido nao tem "reenviar o mesmo": o painel gera outro.
+
+O token e `base64url` de 32 bytes (43 caracteres). Alem do hash, o schema limita o
+campo a 40-64 caracteres de `[A-Za-z0-9_-]`: um corpo de 1 MB de "token" nao e um
+link, e um ataque de corpo grande nao custa caro de barrar na borda.
+
+### Consumido, expirado e inexistente respondem igual
+
+`POST /public/anamneses/abrir`, `/rascunho` e `/enviar` devolvem a mesma mensagem
+para token inexistente, expirado e ja usado. Se as tres se distinguissem, o link
+viraria um oraculo para descobrir se um convite existiu -- e o convite existe
+apenas para um cliente real.
+
+Envio invalido (campo obrigatorio faltando) responde 422 e **nao** consome o
+convite: o cliente corrige e tenta de novo. O consumo acontece na mesma
+transacao que promove o rascunho a `ENVIADA`, entao nao existe estado em que o
+link morre sem anamnese, nem anamnese enviada com link ainda vivo.
+
+### Uso unico significa uso unico
+
+`usedAt` marca o envio, nao a primeira abertura. O link pode ser aberto, fechado e
+reaberto para retomar o rascunho -- e isso que faz "salvar e sair" funcionar em
+celular. Depois do envio ele morre: um link descartavel, nao uma sessao.
+
+### O formulario vem dado, e a resposta validada duas vezes
+
+A clinica escreve o JSON Schema; a API valida o schema e o web renderiza o
+formulario a partir dele (`schema.order` existe porque o `jsonb` do Postgres nao
+preserva a ordem das chaves). O `validarRespostasAnamnesis` do shared roda no
+cliente antes do envio e no servidor antes de gravar, com o mesmo texto: a
+mensagem que o paciente ve e a que o profissional ve depois nao divergem.
+
+### A tela publica mostra so o primeiro nome
+
+Quem recebe o link no celular alheio -- familiar, conjuge -- precisa saber para
+quem esta respondendo sem ler nome completo, cpf e telefone de outra pessoa. Por
+isso `clientFirstName`, e o rate limit por IP fica bem abaixo do global (20/30/10
+por minuto): sao tres chamadas por sessao de preenchimento.
+
 ## Notificacoes
 
 ### A outbox e a fonte de verdade; a fila so acorda o processo
@@ -482,6 +590,71 @@ mesmo cliente. `CANCELADO` responde 409 para sempre: o lembrete foi substituido 
 outro aviso, e reenviar seria mandar algo que ninguem pediu. Aviso de outra clinica
 responde 404, e nao 403: o painel nem confirma que ele existe.
 
+## Financeiro
+
+### Anotacoes em duas paginas rapidas, mesmo fiscal
+
+Nenhuma palavra deste codigo diz "nota fiscal": o documento fiscal e emitido
+pelo sistema da clinica. O que a plataforma registra e o par caixa x recebivel do
+lancamento (`paidAt` x `dueDate`). Nao confundir os dois: `pagar` liquida e
+preenche `paidAt`; `cancelar` encerra sem nunca ter movimentado caixa.
+
+### Status implicito na criacao do lancamento
+
+O formulario nao pergunta "pago ou a receber" -- essa e uma pergunta redundante.
+Quem escolhe a forma de pagamento esta dizendo que o valor entrou na hora
+(`method` presente => `PAGO`, com `paidAt` agora ou informado); quem deixa a forma
+em branco esta dizendo que e a receber (`PENDENTE`, para liquidar depois). Um
+estado impossivel de expressar no banco -- "pago, mas sem forma de pagamento" --
+nao aparece nem no formulario.
+
+`/pagar` e `/cancelar` so aceitam `PENDENTE`/`INADIMPENTE`. Cancelar algo ja
+liquidado apagaria a memoria do caixa.
+
+### Idempotencia com o gateway em mente
+
+`FinancialEntry` tem `(clinicId, idempotencyKey)` unico. O gateway de pagamento
+reenvia o webhook e o cliente clica duas vezes: sem a chave, o mesmo atendimento
+vira dois lancamentos e o caixa nao fecha. O formulario web gera a chave com
+`crypto.randomUUID()` a cada submissao.
+
+### Pacote nasce em transacao: pacote + sessoes + receita
+
+`POST /finance/pacotes` roda dentro de um `$transaction`: cria o pacote, as
+`sessoesDisponiveis` e a receita da venda. Nenhuma dessas tres coisas deveria
+existir sem as outras; uma criacao que morre no meio nao pode deixar um pacote
+sem sessoes.
+
+A receita segue a mesma regra dos lancamentos: `payment` presente => `PAGO`;
+ausente => a receber. O saldo do pacote nunca e um contador guardado: e o
+`count` das `PackageSession` por status.
+
+### Sessao usada no balcao ou pela agenda
+
+`PackageSession` e consumida de dois jeitos: pela agenda (que vincula o
+`appointmentId`) ou na mão, no balcao (`POST .../sessoes/:id/usar`). O inverso so
+existe de um lado: `disponibilizar` devolve ao saldo apenas sessoes `UTILIZADA`
+**sem** `appointmentId`. Uma sessao que a agenda consumiu nao pode ser devolvida
+aqui -- se o agendamento for cancelado, quem decide o destino dela e a agenda.
+
+### Comissao: prevista, aprovada, paga
+
+`PREVISTA -> APROVADA -> PAGA` replica o fluxo da vida real: o valor nasce no
+atendimento, a clinica confere (`aprovar`) e so entao paga. Cancelar so de
+`PREVISTA`/`APROVADA`; comissao paga e historia.
+
+### Resumo: o periodo e o intervalo, nao a lista
+
+`GET /finance/resumo` recebe `de`/`ate` como datas civis e agrega com o limite
+superior exclusivo: `[de, fim)` onde `fim = ate + 1 dia`. Sem datas, o periodo e
+o mes corrente -- o recorte que a clinica usa na vida real.
+
+Cada total usa o que faz sentido para ele: recebido/despesas pelo `paidAt`,
+a receber pelo `dueDate`, "vencido" como o subconjunto do a receber com
+`dueDate` antes de hoje, comissao "a pagar" como `PREVISTA`+`APROVADA`
+independente de periodo. Misturar os dois criterios daria um numero que nenhuma
+pergunta responde.
+
 ## Verificacao
 
 ### A suite nunca escreve no banco de dev
@@ -558,6 +731,12 @@ producao em autenticacao e a origem classica de bug que so aparece no deploy.
 
 - **Painel de notificacoes**: entregue na 5b (tela de listagem e reenvio manual);
   o que fica adiado e o aviso por e-mail do resultado diario do worker.
+- **Acesso do cliente as proprias respostas**: o link da 6b entrega o formulario
+  e permite enviar e retomar rascunho, mas nao da ao cliente uma area logada para
+  consultar o historico de anamneses. Vale notar que ja existe o portal publico
+  de agendamento sem sessao: o mesmo padrao de "token como credencial" daria
+  acesso ao historico sem criar um terceiro tipo de login. Fica para quando
+  houver demanda real.
 - **Worker separado**: assumido dentro do processo da API (ver acima). Escala e
   problema da Etapa 8; a fila ja suporta varios consumidores.
 - **Pagamento online**: o plano trata de "recebido x a receber" e sinal. Integrar

@@ -1,6 +1,7 @@
 import type { Client, ClientCreate } from '@massoterapia/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
+import { useNavigate } from 'react-router';
 
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +22,7 @@ export function ClientesPage() {
   const { estado } = useAuth();
   const podeEscrever = estado.status === 'autenticado' && estado.perfil.role === 'ADMIN';
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [busca, setBusca] = useState('');
   const [incluirInativos, setIncluirInativos] = useState(false);
@@ -128,6 +130,17 @@ export function ClientesPage() {
                       </Badge>
                     </td>
                     <td className="py-2 text-right whitespace-nowrap">
+                      {/* Ler o prontuario nao e privilegegio de ADMIN: e o que o
+                          profissional faz antes de atender. */}
+                      <Button
+                        variante="fantasma"
+                        tamanho="sm"
+                        onClick={() => {
+                          void navigate(`/clientes/${cliente.id}/prontuario`);
+                        }}
+                      >
+                        Prontuario
+                      </Button>
                       {podeEscrever ? (
                         <>
                           <Button

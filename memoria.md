@@ -577,3 +577,70 @@ Os profissionais nao tem login; o cadastro preve `userId` nulo. Ao implementar a
 agenda (Etapa 4), revisar se algum fluxo ja precisa do acesso do profissional ao
 proprio painel.
 
+---
+
+## 9. Financeiro (Etapa 7)
+
+Objetivo: fechar o financeiro full-stack, com escopo confirmado com o usuario --
+**completo** (recebido x a receber, pacotes de sessoes, comissoes e resumo do
+periodo) e **um unico item "Financeiro" no menu** com abas internas. O schema
+Prisma ja tinha todos os modelos (`FinancialEntry`, `Package`,
+`PackageSession`, `Commission`), entao nao houve migration nova.
+
+### 9.1 O que foi entregue
+
+- **Shared**: `domain/financial.ts` ganhou status e labels de pacote, sessao e
+  comissao; `schemas/financial.ts` (lancamentos, pacotes, comissoes, resumo,
+  `dateQuerySchema`) exportado no `index.ts`.
+- **API**: `lib/financeiro.ts` (`dataColuna`, `diaSeguinte`, `hojeCivil` e os
+  mapeadores de resposta) e `routes/financeiro.ts`, registrado em `app.ts` com
+  prefixo `/finance` (tag `finance`). Leitura com `requireAuth`; escrita com
+  `requireRole('ADMIN')`.
+- **Web**: `lib/financeiro.ts` (cliente de dados) e `FinanceiroPage` com as abas
+  Lancamentos / Pacotes / Comissoes / Resumo, rota `/financeiro` e item no menu.
+- **Testes**: `tests/financeiro.test.ts`, 13 casos.
+
+### 9.2 Decisoes
+
+- **Status implicito na criacao**: `method` presente => PAGO (pago na hora);
+  ausente => PENDENTE (a receber). `paidAt` so entra junto com `method`.
+- **Pacote em `$transaction`**: pacote + N sessoes + receita da venda, com a
+  regra de pagamento acima; saldo sempre derivado do count das sessoes.
+- **Sessao**: `usar` so de `DISPONIVEL`; `disponibilizar` devolve ao saldo apenas
+  `UTILIZADA` sem `appointmentId` (a agenda e quem cuida da sessao vinculada).
+- **Comissao**: `PREVISTA -> APROVADA -> PAGA`; cancelar so de PREVISTA/APROVADA.
+- **Resumo**: intervalo `[de, ate+1dia)`; por padrao o mes corrente; recebido pelo
+  `paidAt`, a receber pelo `dueDate`, vencido como o subconjunto a receber com
+  vencimento antes de hoje, comissao "a pagar" como PREVISTA+APROVADA.
+- **Idempotencia**: `(clinicId, idempotencyKey)` unico -> 409; pacote unico
+  `(clinicId, clientId, name)` -> 409. O formulario web gera a chave com
+  `crypto.randomUUID()`.
+- **Web**: sem banco de tabs proprio; ABAS + estado local, mesmo padrao de
+  estado+`useMutation`/`useQuery` do resto do painel.
+
+### 9.3 Bugs encontrados
+
+- **`as const` em `status: { in: [...] }` quebrava o `where` do Prisma** (tupla
+  readonly nao cabe no `EnumFinancialEntryStatusFilter`). Resolvido anotando os
+  objetos de filtro como `Prisma.FinancialEntryWhereInput`.
+- **`_sum` dos aggregates e opcional**: acesso via `_sum?.amountCents ?? 0`.
+- **`detalhe?.sessions` perdia o narrowing do react-query**: a renderizacao passou
+  a guardar `detalhe === undefined` antes de mapear.
+- **`useAuth()` chamado duas vezes no mesmo componente** quebrava o narrowing do
+  `estado`; uma unica chamada resolve.
+- **Primeira chamada `intl`/first test timeout de 5s**: friagem de cold start da
+  suite, nao bug de contrato (na segunda execucao, 13/13).
+- **Lint `simple-import-sort`**: os importes novos foram ordenados via
+  `lint:fix`.
+
+### 9.4 Verificacao final
+
+| Item | Resultado |
+| --- | --- |
+| Testes novos nesta etapa | 13 (`financeiro.test.ts`) |
+| Suite completa da API | 241/241 (15 arquivos) |
+| `typecheck` shared / api / web | OK |
+| `lint` shared / api / web | OK |
+| `prettier --write` nos arquivos da etapa | OK |
+| `pnpm check` (format + lint + typecheck + test + build) | a rodar como gate final |
+
