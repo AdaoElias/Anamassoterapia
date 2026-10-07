@@ -1,13 +1,22 @@
+import { CalendarCheck2, HeartPulse, Leaf, Sparkles } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { Navigate, useLocation } from 'react-router';
 
 import { useAuth } from '@/components/auth/AuthProvider';
+import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api';
 import type { ClinicaResumo } from '@/lib/auth';
 
 interface EstadoNavegacao {
   de?: string;
 }
+
+const BENEFICIOS = [
+  { icone: CalendarCheck2, texto: 'Agenda que se organiza sozinha' },
+  { icone: HeartPulse, texto: 'Prontuario completo com anamnese' },
+  { icone: Leaf, texto: 'Bem-estar em cada detalhe da rotina' },
+  { icone: Sparkles, texto: 'Financeiro e pacotes sem planilha' },
+];
 
 /**
  * Login em dois passos.
@@ -57,89 +66,147 @@ export function LoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 p-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Entrar</h1>
-        <p className="text-sm text-slate-600">
+    <div className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
+      {/* Painel da marca. */}
+      <aside className="relative hidden flex-col justify-between overflow-hidden bg-brand-950 p-12 lg:flex">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(30rem_at_-10%_-10%,oklch(0.45_0.1_150/0.5),transparent_60%),radial-gradient(26rem_at_110%_110%,oklch(0.45_0.11_35/0.4),transparent_60%)]"
+        />
+        <div className="relative flex items-center gap-3">
+          <span className="grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-brand-400 to-clay-500 text-white shadow-lift">
+            <Leaf size={24} strokeWidth={2.2} />
+          </span>
+          <div>
+            <p className="font-display text-xl font-semibold tracking-tight text-white">
+              Clínica Wave
+            </p>
+            <p className="text-xs text-brand-200/70">massoterapia & bem-estar</p>
+          </div>
+        </div>
+
+        <div className="relative max-w-md space-y-8">
+          <h1 className="font-display text-4xl leading-tight font-medium tracking-tight text-white">
+            O cuidado que sua clinica merece.
+          </h1>
+          <ul className="space-y-4">
+            {BENEFICIOS.map((beneficio) => {
+              const Icone = beneficio.icone;
+              return (
+                <li key={beneficio.texto} className="flex items-center gap-3 text-brand-100">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/10 text-brand-200">
+                    <Icone size={17} />
+                  </span>
+                  <span className="text-sm font-medium">{beneficio.texto}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        <p className="relative text-xs text-brand-200/50">
           Acesso restrito a profissionais e administracao das clinicas.
         </p>
-      </header>
+      </aside>
 
-      {clinicas === null ? (
-        <form
-          onSubmit={aoSubmeter}
-          className="space-y-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
-        >
-          <label className="block space-y-1">
-            <span className="text-sm font-medium text-slate-700">E-mail</span>
-            <input
-              type="email"
-              required
-              autoComplete="username"
-              value={email}
-              onChange={(evento) => setEmail(evento.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 focus:outline-none"
-            />
-          </label>
-
-          <label className="block space-y-1">
-            <span className="text-sm font-medium text-slate-700">Senha</span>
-            <input
-              type="password"
-              required
-              autoComplete="current-password"
-              value={senha}
-              onChange={(evento) => setSenha(evento.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 focus:outline-none"
-            />
-          </label>
-
-          {erro ? (
-            <p role="alert" className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              {erro}
-            </p>
-          ) : null}
-
-          <button
-            type="submit"
-            disabled={enviando}
-            className="w-full rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-          >
-            {enviando ? 'Entrando...' : 'Entrar'}
-          </button>
-        </form>
-      ) : (
-        <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-700">Escolha a clinica</h2>
-          <p className="text-sm text-slate-600">
-            Seu usuario tem acesso a mais de uma clinica. A sessao fica restrita a escolhida.
+      {/* Formulario. */}
+      <main className="flex flex-col items-center justify-center gap-8 p-6 sm:p-10">
+        <div className="flex w-full max-w-sm flex-col items-center gap-2 lg:hidden">
+          <span className="grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-clay-500 text-white shadow-lift">
+            <Leaf size={24} strokeWidth={2.2} />
+          </span>
+          <p className="font-display text-xl font-semibold tracking-tight text-slate-900">
+            Clínica Wave
           </p>
+        </div>
 
-          <ul className="space-y-2">
-            {clinicas.map((clinica) => (
-              <li key={clinica.id}>
-                <button
-                  type="button"
-                  disabled={enviando}
-                  onClick={() => void enviar(clinica.id)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-left text-sm text-slate-800 hover:border-brand-400 hover:bg-brand-50 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none disabled:opacity-60"
+        <div className="w-full max-w-sm">
+          {clinicas === null ? (
+            <form onSubmit={aoSubmeter} className="space-y-5">
+              <header className="space-y-1">
+                <h1 className="font-display text-3xl font-medium tracking-tight text-slate-900">
+                  Entrar
+                </h1>
+                <p className="text-sm text-slate-500">
+                  Acesso restrito a profissionais e administracao das clinicas.
+                </p>
+              </header>
+
+              <label className="block space-y-1.5">
+                <span className="text-sm font-semibold text-slate-700">E-mail</span>
+                <input
+                  type="email"
+                  required
+                  autoComplete="username"
+                  value={email}
+                  onChange={(evento) => setEmail(evento.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 transition-shadow focus:border-brand-500 focus:ring-4 focus:ring-brand-100 focus:outline-none"
+                />
+              </label>
+
+              <label className="block space-y-1.5">
+                <span className="text-sm font-semibold text-slate-700">Senha</span>
+                <input
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  value={senha}
+                  onChange={(evento) => setSenha(evento.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 transition-shadow focus:border-brand-500 focus:ring-4 focus:ring-brand-100 focus:outline-none"
+                />
+              </label>
+
+              {erro ? (
+                <p
+                  role="alert"
+                  className="rounded-xl bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700"
                 >
-                  <span className="font-medium">{clinica.nome}</span>
-                  <span className="ml-2 text-xs text-slate-500">{clinica.role}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+                  {erro}
+                </p>
+              ) : null}
 
-          <button
-            type="button"
-            onClick={() => setClinicas(null)}
-            className="text-xs text-slate-500 underline hover:text-slate-700"
-          >
-            Voltar
-          </button>
-        </section>
-      )}
-    </main>
+              <Button type="submit" disabled={enviando} className="w-full" tamanho="md">
+                {enviando ? 'Entrando...' : 'Entrar'}
+              </Button>
+            </form>
+          ) : (
+            <section className="space-y-3">
+              <header className="space-y-1">
+                <h1 className="font-display text-3xl font-medium tracking-tight text-slate-900">
+                  Escolha a clinica
+                </h1>
+                <p className="text-sm text-slate-500">
+                  Seu usuario tem acesso a mais de uma clinica. A sessao fica restrita a escolhida.
+                </p>
+              </header>
+
+              <ul className="space-y-2">
+                {clinicas.map((clinica) => (
+                  <li key={clinica.id}>
+                    <button
+                      type="button"
+                      disabled={enviando}
+                      onClick={() => void enviar(clinica.id)}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-left text-sm text-slate-800 transition-colors hover:border-brand-400 hover:bg-brand-50 focus-visible:ring-4 focus-visible:ring-brand-100 focus-visible:outline-none disabled:opacity-60"
+                    >
+                      <span className="font-semibold">{clinica.nome}</span>
+                      <span className="ml-2 text-xs text-slate-500">{clinica.role}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              <button
+                type="button"
+                onClick={() => setClinicas(null)}
+                className="text-xs text-slate-500 underline hover:text-slate-700"
+              >
+                Voltar
+              </button>
+            </section>
+          )}
+        </div>
+      </main>
+    </div>
   );
 }

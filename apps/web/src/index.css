@@ -1,16 +1,96 @@
 @import 'tailwindcss';
 
+/* Tipografia self-hosted (variavel, latin): Fraunces para display, Manrope
+   para UI. Nenhuma dependencia de CDN no runtime, funciona offline. */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('/fonts/fraunces-var.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/manrope-var.woff2') format('woff2');
+}
+
 @theme {
-  --color-brand-50: oklch(0.97 0.014 180);
-  --color-brand-100: oklch(0.93 0.032 180);
-  --color-brand-200: oklch(0.87 0.055 180);
-  --color-brand-300: oklch(0.79 0.078 180);
-  --color-brand-400: oklch(0.7 0.098 180);
-  --color-brand-500: oklch(0.61 0.108 180);
-  --color-brand-600: oklch(0.52 0.1 180);
-  --color-brand-700: oklch(0.45 0.085 180);
-  --color-brand-800: oklch(0.39 0.068 180);
-  --color-brand-900: oklch(0.33 0.052 180);
+  /* --- Primaria: salvia (cresci, calmante, organica) --- */
+  --color-brand-50: oklch(0.978 0.023 156);
+  --color-brand-100: oklch(0.955 0.038 154);
+  --color-brand-200: oklch(0.918 0.058 152);
+  --color-brand-300: oklch(0.854 0.074 150);
+  --color-brand-400: oklch(0.76 0.086 148);
+  --color-brand-500: oklch(0.638 0.089 145);
+  --color-brand-600: oklch(0.53 0.077 142);
+  --color-brand-700: oklch(0.458 0.068 140);
+  --color-brand-800: oklch(0.395 0.057 138);
+  --color-brand-900: oklch(0.338 0.048 136);
+  --color-brand-950: oklch(0.264 0.04 134);
+
+  /* --- Acento: argila/terracota (calor humano) --- */
+  --color-clay-50: oklch(0.98 0.018 45);
+  --color-clay-100: oklch(0.958 0.034 45);
+  --color-clay-200: oklch(0.912 0.053 43);
+  --color-clay-300: oklch(0.848 0.073 42);
+  --color-clay-400: oklch(0.749 0.09 39);
+  --color-clay-500: oklch(0.648 0.098 36);
+  --color-clay-600: oklch(0.565 0.087 34);
+  --color-clay-700: oklch(0.492 0.072 32);
+  --color-clay-800: oklch(0.422 0.056 30);
+  --color-clay-900: oklch(0.366 0.043 28);
+
+  /* --- Neutros quentes: o cinza-ardosia ganha tom de areia. Todos os
+       `slate-*` existentes passam a ser quentes sem mudar uma classe. --- */
+  --color-slate-50: oklch(0.982 0.008 88);
+  --color-slate-100: oklch(0.963 0.009 86);
+  --color-slate-200: oklch(0.932 0.011 84);
+  --color-slate-300: oklch(0.883 0.013 82);
+  --color-slate-400: oklch(0.783 0.014 79);
+  --color-slate-500: oklch(0.676 0.015 76);
+  --color-slate-600: oklch(0.575 0.014 73);
+  --color-slate-700: oklch(0.468 0.013 70);
+  --color-slate-800: oklch(0.386 0.012 68);
+  --color-slate-900: oklch(0.316 0.01 66);
+  --color-slate-950: oklch(0.22 0.008 64);
+
+  /* --- Tipografia --- */
+  --font-sans:
+    'Manrope', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    sans-serif;
+  --font-display: 'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
+
+  /* --- Sombras suaves e quentes --- */
+  --shadow-panel: 0 1px 2px oklch(0.3 0.02 70 / 0.05), 0 4px 14px -6px oklch(0.3 0.02 70 / 0.1);
+  --shadow-lift: 0 2px 6px oklch(0.3 0.02 70 / 0.08), 0 18px 40px -18px oklch(0.3 0.02 70 / 0.22);
+
+  /* --- Movimento curto e suave --- */
+  --animate-fade-in: fade-in 0.22s ease-out;
+  --animate-panel-up: panel-up 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes panel-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
 }
 
 @layer base {
@@ -19,15 +99,19 @@
   }
 
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
-    font-family:
-      ui-sans-serif,
-      system-ui,
-      -apple-system,
-      'Segoe UI',
-      Roboto,
-      'Helvetica Neue',
-      sans-serif;
+    @apply bg-slate-50 text-slate-800 antialiased;
+    font-family: var(--font-sans);
+  }
+
+  ::selection {
+    background-color: var(--color-brand-200);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
   }
 
   /* Respeita quem desativou animacao no sistema. */
