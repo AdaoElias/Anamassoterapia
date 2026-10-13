@@ -919,7 +919,8 @@ reconectou sozinho assim que o banco subiu.
 
 ### 11.8 Estado do repositorio nesta sessao
 
-Branch `main`; ultimo commit `7cfc8b2`. **Nada commitado.**
+Branch `main`; ultimo commit `7cfc8b2` no momento desta sessao. O redesign foi
+commitado depois em `20ac7b9` (ver secao 16).
 
 Arquivos modificados (18):
 
@@ -1063,7 +1064,8 @@ por isso.
   fica pendente de uma maquina com Docker (validar na Fase 1).
 - Fase 0 validada em modo producao **sem** container (mais importante: o
   comportamento do app e o mesmo).
-- **Nada commitado.** O redesign visual (secao 11) tambem continua sem commit.
+- **Commitado em `20ac7b9`** junto com o redesign (secao 11) e as Fases 1-2
+  (ver secao 16).
 - Proximo passo natural: **Fase 1** (subir um ambiente na nuvem: Postgres
   gerenciado + deploy + TLS + dominio) -- ver `docs/deploy-nuvem.md`.
 
@@ -1120,7 +1122,8 @@ Railway a partir do GitHub.
   distintos; `ANAMNESIS_ENCRYPTION_KEY` de 64 hex, **definitiva**).
 - Construir/subir a imagem segue sem validacao local (Docker ausente); o Railway
   faz o build no deploy.
-- **Nada commitado ainda** (redesign + Fase 0 + preparo da Fase 1).
+- **Commitado em `20ac7b9`** (redesign + Fase 0 + preparo da Fase 1) -- ver
+  secao 16.
 
 ---
 
@@ -1173,8 +1176,7 @@ pnpm --filter @massoterapia/api provision -- --name "Clinica Wave" \
 
 - 5.2: implementada na rodada seguinte (ver secao 15).
 - 5.3 (Fase 3): login do profissional + RBAC revisado.
-- **Nada commitado ainda.**
-
+- **Commitado em `20ac7b9`** (ver secao 16).
 
 ---
 
@@ -1251,6 +1253,192 @@ Nenhuma migracao nova -- o convite reusa `PasswordResetToken`.
 
 - 5.3 (Fase 3): login do profissional + RBAC revisado.
 - Envio real de e-mail do convite (hoje so `NOTIFIER_DRIVER=log`).
-- **Nada commitado ainda.**
+- **Commitado em `20ac7b9`** (ver secao 16).
+
+---
+
+## 16. Fase 1 (Railway) -- primeiro deploy, correcoes e provisionamento
+
+### 16.1 O que foi commitado e enviado
+
+- **Commit `20ac7b9`** -- "feat: deploy na nuvem (Fase 0/1) e gestao de usuarios
+  da clinica (Fase 2)": 43 arquivos, ~4050 insercoes, ~167 remocoes. Engloba o
+  redesign (secao 11), a Fase 0 (secao 12), o preparo da Fase 1 (secao 13), o
+  provisionamento 5.1 (secao 14) e a gestao de usuarios 5.2 (secao 15).
+- **Remote trocado de SSH para HTTPS**
+  (`https://github.com/AdaoElias/Anamassoterapia.git`): nao ha chave SSH nesta
+  maquina (`ssh -T git@github.com` -> `Permission denied (publickey)`); quem
+  autentica o push e o **Git Credential Manager** (configurado no system level,
+  `file:C:/Program Files/Git/etc/gitconfig`). `gh` CLI nao existe; git
+  `2.55.0.windows.4`.
+- **Commit `d8a1d07`** -- "fix: remove cache mount do pnpm install (formato
+  exigido pelo Railway)" (ver 16.2).
+- O hook de **pre-push roda a suite completa**: 250 testes passando.
+
+### 16.2 Correcao do Dockerfile (Railway rejeita o cache mount)
+
+- **Erro no build:** `Dockerfile invalido: a flag
+  '--mount=type=cache,id=pnpm,target=/pnpm/store' nao possui o prefixo cacheKey
+  em seu ID`.
+- **Causa:** o Railway exige que o `id` de um cache mount siga o formato
+  `s/<service-id>-...`. Um id arbitrario (`pnpm`) faz o build falhar no parse,
+  **antes** de comecar.
+- **Correcao:** removido o `--mount=type=cache` da linha do `pnpm install`
+  (agora `RUN pnpm install --frozen-lockfile`). A camada de install continua
+  cacheada pelo Docker -- o ganho e quase todo mantido. Commit `d8a1d07`.
+- Alternativa futura (se quiser o cache mount de volta): reintroduzir com
+  `id=s/<service-id>-pnpm/store`.
+- Confirmado por leitura do `Dockerfile`: estagio unico, **sem** prune de
+  devDependencies -- por isso `tsx` e o Prisma CLI existem na imagem e os
+  comandos `provision`/`db:migrate:deploy` rodam dentro do container.
+
+### 16.3 Deploy no Railway -- estado e armadilhas
+
+- As variaveis do plugin **Postgres** (`PGHOST`, `PGUSER`, `PGPASSWORD`,
+  `PGDATABASE`, `PGPORT`, `PGDATA`, `POSTGRES_*`, `SSL_CERT_DAYS`) sao do
+  **servico do banco** -- nao devem ser copiadas para a API.
+  `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` e injetada pelo Railway.
+- As variaveis do app vao no **servico da API**. A principal e
+  `DATABASE_URL = ${{Postgres.DATABASE_URL}}` (referencia a rede interna, sem
+  SSL; `Postgres` = nome exato do servico do banco).
+- **Armadilha encontrada:** o servico da API estava **sem `DATABASE_URL`**. O
+  entrypoint morre no `prisma migrate deploy` com
+  `DATABASE_URL nao definida. Copie .env.example para .env`
+  (`apps/api/prisma.config.ts:17`); e, mesmo se passasse, o `env.ts:29` abortaria
+  o boot pela mesma variavel. Resultado: loop de restart. **Correcao:** definir
+  `DATABASE_URL` no servico da API.
+- Nao definir `NODE_ENV`/`API_HOST`/`API_PORT`/`WEB_DIST_DIR` no Railway (o
+  `Dockerfile` ja fixa). Healthcheck do `railway.json` aponta para
+  `/health/ready` (que consulta o banco).
+
+### 16.4 Planos do Railway x usuarios do app (esclarecimento pedido)
+
+- O limite de "membros" do Railway e sobre **quem acessa o painel** (devs), nao
+  sobre os usuarios do sistema. Free = 1; **Hobby = ate 3**; Pro = ilimitado.
+- "Mais pessoas usando" o app **nao exige mudar de plano**: o app atende a
+  clinica inteira em qualquer plano; Hobby (US$5/mes, com US$5 de uso) basta.
+  Free (US$1, 0.5 GB RAM) nao serve para producao com Postgres 24/7.
+
+### 16.5 Provisionamento em producao (como rodar)
+
+- O seed e bloqueado em producao (`assertNotProduction`); o caminho oficial e o
+  `provision` (secao 14).
+- **Railway CLI instalada nesta maquina:** `npm i -g @railway/cli` ->
+  `railway 5.67.1`. (O script `curl ... railway.com/install.sh | sh` e so para
+  macOS/Linux.)
+- Fluxo:
+  1. `railway login` (abre o navegador);
+  2. `railway link` -- escolher projeto, ambiente (`production`) e o **servico
+     da API** (nao o Postgres);
+  3. `railway ssh` -- abre shell **dentro** do container (no primeiro uso,
+     registra uma chave SSH);
+  4. dentro do container:
+     ```
+     PROVISION_ADMIN_PASSWORD='UmaSenhaForte123' \
+       pnpm --filter @massoterapia/api provision -- \
+       --name "Clinica Wave" --email admin@seudominio.com
+     ```
+- **Nao usar `railway run`** para provisionar: roda na maquina local e nao
+  alcanca o host interno `postgres.railway.internal`.
+- Alternativa sem CLI: a aba **Console** (shell no navegador) do servico, se
+  disponivel no painel.
+
+### 16.6 Armadilha do login "E-mail ou senha invalidos"
+
+- `apps/api/src/routes/auth.ts:190` busca o usuario pelo e-mail **exato** (login
+  e provision normalizam para minusculas, com `trim`). Logo, o 401 significa:
+  usuario inexistente **no banco que a API usa agora**, senha divergente, ou
+  credenciais de **demo** (`admin@clinicawave.com.br` / `Wave@2026`) -- que em
+  producao **nao existem** (seed bloqueado).
+- **Diagnostico rapido:** rodar o `provision` de novo.
+  - `Ja existe um usuario com o e-mail ...` -> o usuario esta no banco certo; o
+    problema e a senha. Usar "Esqueci minha senha"; com `EMAIL_PROVIDER=log` o
+    link de redefinicao (usa `env.WEB_PUBLIC_URL`) aparece nos **Logs da API**.
+  - `Clinica provisionada.` -> a tentativa anterior foi criada em outro banco
+    (tipicamente um `railway run`/`.env` local).
+- **Gotcha de shell:** senha com caracteres especiais (`$ ! & *`) deve ir entre
+  **aspas simples**; com aspas duplas o shell interpola e a senha salva diverge.
+
+### 16.7 Pendencias (continuar daqui)
+
+- Concluir o provisionamento do admin no Railway (depende do usuario executar
+  `railway login`/`link`/`ssh` e colar o resultado).
+- Confirmar o login no dominio e o cookie `mt_refresh`
+  (`Secure`/`HttpOnly`/`SameSite=Lax`/`Path=/api/auth`).
+- Observar se o healthcheck (`/health/ready`) causa restart por oscilacao do
+  banco -- o `railway.json` reinicia em `ON_FAILURE` e essa rota depende do
+  Postgres.
+- 5.3 (Fase 3): login do profissional + RBAC revisado. Escopo **pendente de
+  confirmacao**: (a) acesso do profissional ao financeiro -- **RESOLVIDO na
+  secao 17** (financeiro e notificacoes agora sao ADMIN-only) -- e (b) forma de
+  vinculo `User`<->`Professional` (`Professional.userId` existe mas nenhum fluxo
+  o preenche).
+- Working tree limpa apos `d8a1d07`.
+
+---
+
+## 17. RBAC: financeiro (e notificacoes) so para ADMIN
+
+### 17.1 O problema
+
+- O usuario cadastrou um **PROFISSIONAL** e ele **teve acesso ao financeiro** do
+  sistema.
+- **Causa (backend):** em `apps/api/src/routes/financeiro.ts`, as 5 rotas de
+  **leitura** usavam so `app.requireAuth` -- qualquer papel autenticado via
+  caixa, pacotes, comissoes e o resumo. O comentario do topo dizia
+  explicitamente que "a equipe toda ve o caixa e o saldo de sessoes".
+- **Causa (web):** o item de menu `Financeiro` e o atalho do `HomePage` nao
+  tinham guarda, e a rota `/financeiro` ficava fora de `RotaAdmin`.
+- **Bug da mesma classe:** `Notificacoes` tambem e ADMIN-only na API
+  (`notifications.ts`, as 2 rotas), mas aparecia no menu e no `HomePage` para
+  qualquer papel.
+
+### 17.2 Correcao
+
+**Backend** (`apps/api/src/routes/financeiro.ts`):
+
+- As 5 leituras (`GET /lancamentos`, `GET /pacotes`, `GET /pacotes/:id`,
+  `GET /comissoes`, `GET /resumo`) passaram de `app.requireAuth` para
+  `[app.requireAuth, app.requireRole('ADMIN')]`. Agora **as 15 rotas** do modulo
+  exigem ADMIN.
+- Adicionado `403: erroSchema` no schema de resposta de cada leitura
+  (documentacao OpenAPI; o write ja declarava 403).
+- Comentario do topo reescrito: toda rota pede ADMIN.
+
+**Web:**
+
+- `apps/web/src/router.tsx`: rotas `financeiro` e `notificacoes` envolvidas em
+  `RotaAdmin` (mesma guarda de `usuarios`); comentario da guarda atualizado.
+- `apps/web/src/components/layout/AppLayout.tsx`: `Financeiro` e `Notificacoes`
+  marcados `somenteAdmin` (somem para PROFISSIONAL).
+- `apps/web/src/pages/HomePage.tsx`: `ATALHOS` ganhou o campo `somenteAdmin`
+  (com `interface Atalho` e `ComponentType<LucideProps>`); o render filtra por
+  papel via `ehAdmin`. `Financeiro` e `Notificacoes` somem para nao-ADMIN.
+
+**Testes** (`apps/api/tests/financeiro.test.ts`):
+
+- O teste "bloqueia escrita para PROFISSIONAL" virou "bloqueia PROFISSIONAL na
+  leitura e na escrita"; a leitura agora espera **403** (antes, 200 -- o teste
+  codificava o comportamento errado).
+- Novo `describe('RBAC de profissional')`: as 4 leituras devem dar 403.
+
+### 17.3 Verificacao
+
+- API: `typecheck` + `lint` OK; suite completa **251 testes** passando (era 250,
+  +1 do RBAC).
+- Web: `typecheck` + `lint` OK.
+- `prettier --check` OK nos 5 arquivos alterados.
+
+### 17.4 O que NAO foi mudado (pendente de decisao)
+
+- **Escopo por profissional.** Hoje o PROFISSIONAL ainda enxerga **todos** os
+  clientes, agendamentos, prontuarios e anamneses da clinica -- o modelo e por
+  clinica (`Client`/`Appointment` tem `clinicId`, nao um dono profissional).
+  Limitar "aos seus clientes" exige decidir o vinculo (ex.: pelo `professionalId`
+  do agendamento) e revisar cada listagem. **Aguardando decisao do usuario.**
+- As demais leituras (clientes, agenda, prontuario, terapias, profissionais,
+  clinica) continuam `requireAuth`: o profissional ve, mas nao escreve (escrita
+  ja e ADMIN).
+- **Commit pendente.**
 
 

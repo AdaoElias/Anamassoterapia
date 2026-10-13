@@ -39,9 +39,10 @@ import { prisma } from '../lib/prisma.js';
  * Financeiro da clinica: lancamentos (recebido x a receber), pacotes de
  * sessoes, comissoes e o resumo do periodo.
  *
- * Leitura pede `requireAuth` (a equipe toda ve o caixa e o saldo de
- * sessoes); escrita pede ADMIN. Toda query filtra por `clinicId` da sessao
- * e devolve 404 para id de outra clinica -- o mesmo contrato dos cadastros.
+ * Toda rota pede ADMIN: caixa, saldo de sessoes, comissoes e o resumo sao
+ * informacao financeira, e o profissional nao tem acesso a ela. Toda query
+ * filtra por `clinicId` da sessao e devolve 404 para id de outra clinica --
+ * o mesmo contrato dos cadastros.
  *
  * Recursos vivos seguem o dominio:
  * - Lancamento a receber (PENDENTE/INADIMPENTE) vira PAGO em `/pagar` e
@@ -73,9 +74,9 @@ export const financeiroRoutes: FastifyPluginCallbackZod = (app, _options, done) 
         tags: ['finance'],
         summary: 'Lista os lancamentos financeiros',
         querystring: financialEntryListQuerySchema,
-        response: { 200: financialEntryListResponseSchema, 401: erroSchema },
+        response: { 200: financialEntryListResponseSchema, 401: erroSchema, 403: erroSchema },
       },
-      preHandler: app.requireAuth,
+      preHandler: [app.requireAuth, app.requireRole('ADMIN')],
     },
     async (request, reply) => {
       const sessao = request.auth;
@@ -356,9 +357,9 @@ export const financeiroRoutes: FastifyPluginCallbackZod = (app, _options, done) 
         tags: ['finance'],
         summary: 'Lista os pacotes de sessoes',
         querystring: packageListQuerySchema,
-        response: { 200: packageListResponseSchema, 401: erroSchema },
+        response: { 200: packageListResponseSchema, 401: erroSchema, 403: erroSchema },
       },
-      preHandler: app.requireAuth,
+      preHandler: [app.requireAuth, app.requireRole('ADMIN')],
     },
     async (request, reply) => {
       const sessao = request.auth;
@@ -402,9 +403,9 @@ export const financeiroRoutes: FastifyPluginCallbackZod = (app, _options, done) 
         tags: ['finance'],
         summary: 'Detalhe de um pacote com as sessoes',
         params: paramsSchema,
-        response: { 200: packageDetailSchema, 401: erroSchema, 404: erroSchema },
+        response: { 200: packageDetailSchema, 401: erroSchema, 403: erroSchema, 404: erroSchema },
       },
-      preHandler: app.requireAuth,
+      preHandler: [app.requireAuth, app.requireRole('ADMIN')],
     },
     async (request, reply) => {
       const sessao = request.auth;
@@ -783,9 +784,9 @@ export const financeiroRoutes: FastifyPluginCallbackZod = (app, _options, done) 
         tags: ['finance'],
         summary: 'Lista as comissoes dos profissionais',
         querystring: commissionListQuerySchema,
-        response: { 200: commissionListResponseSchema, 401: erroSchema },
+        response: { 200: commissionListResponseSchema, 401: erroSchema, 403: erroSchema },
       },
-      preHandler: app.requireAuth,
+      preHandler: [app.requireAuth, app.requireRole('ADMIN')],
     },
     async (request, reply) => {
       const sessao = request.auth;
@@ -973,9 +974,9 @@ export const financeiroRoutes: FastifyPluginCallbackZod = (app, _options, done) 
           'por vencimento (dueDate), valores por metodo, inadimplencia e comissoes. Sem ' +
           '`de`/`ate`, o periodo e o mes corrente.',
         querystring: resumoQuerySchema,
-        response: { 200: resumoFinanceiroSchema, 401: erroSchema },
+        response: { 200: resumoFinanceiroSchema, 401: erroSchema, 403: erroSchema },
       },
-      preHandler: app.requireAuth,
+      preHandler: [app.requireAuth, app.requireRole('ADMIN')],
     },
     async (request, reply) => {
       const sessao = request.auth;

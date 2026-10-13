@@ -118,7 +118,7 @@ afterAll(async () => {
 });
 
 describe('lancamentos', () => {
-  it('exige autenticacao e bloqueia escrita para PROFISSIONAL', async () => {
+  it('exige autenticacao e bloqueia PROFISSIONAL na leitura e na escrita', async () => {
     const app = await novaApp();
     const fixture = await criarFixture('PROFISSIONAL');
     const token = await autenticar(app, fixture);
@@ -131,7 +131,7 @@ describe('lancamentos', () => {
       url: '/finance/lancamentos',
       headers: comToken(token),
     });
-    expect(lendo.statusCode).toBe(200);
+    expect(lendo.statusCode).toBe(403);
 
     const escrevendo = await app.inject({
       method: 'POST',
@@ -637,5 +637,25 @@ describe('resumo', () => {
     const app = await novaApp();
     const resposta = await app.inject({ method: 'GET', url: '/finance/resumo' });
     expect(resposta.statusCode).toBe(401);
+  });
+});
+
+describe('RBAC de profissional', () => {
+  it('recusa PROFISSIONAL em todas as leituras do financeiro', async () => {
+    const app = await novaApp();
+    const fixture = await criarFixture('PROFISSIONAL');
+    const token = await autenticar(app, fixture);
+
+    const leituras = [
+      '/finance/lancamentos',
+      '/finance/pacotes',
+      '/finance/comissoes',
+      '/finance/resumo',
+    ];
+
+    for (const url of leituras) {
+      const resposta = await app.inject({ method: 'GET', url, headers: comToken(token) });
+      expect(resposta.statusCode, url).toBe(403);
+    }
   });
 });

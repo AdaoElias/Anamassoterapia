@@ -6,10 +6,12 @@ import {
   CalendarCheck2,
   CalendarDays,
   Clock,
+  type LucideProps,
   Sparkles,
   Users,
   Wallet,
 } from 'lucide-react';
+import type { ComponentType } from 'react';
 import { Link } from 'react-router';
 
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -38,10 +40,25 @@ const TOM_POR_STATUS: Record<
   NO_SHOW: 'danger',
 };
 
-const ATALHOS = [
+interface Atalho {
+  to: string;
+  rotulo: string;
+  icone: ComponentType<LucideProps>;
+  descricao: string;
+  /** Item visivel apenas para ADMIN (financeiro e notificacoes sao so de ADMIN). */
+  somenteAdmin?: boolean;
+}
+
+const ATALHOS: Atalho[] = [
   { to: '/agenda', rotulo: 'Agenda', icone: CalendarDays, descricao: 'Sessoes do dia' },
   { to: '/clientes', rotulo: 'Clientes', icone: Users, descricao: 'Cadastro e prontuario' },
-  { to: '/financeiro', rotulo: 'Financeiro', icone: Wallet, descricao: 'Caixa e pacotes' },
+  {
+    to: '/financeiro',
+    rotulo: 'Financeiro',
+    icone: Wallet,
+    descricao: 'Caixa e pacotes',
+    somenteAdmin: true,
+  },
   { to: '/terapias', rotulo: 'Terapias', icone: Sparkles, descricao: 'Cardapio e precos' },
   {
     to: '/disponibilidade',
@@ -49,7 +66,13 @@ const ATALHOS = [
     icone: Clock,
     descricao: 'Horarios e folgas',
   },
-  { to: '/notificacoes', rotulo: 'Notificacoes', icone: Bell, descricao: 'Avisos enviados' },
+  {
+    to: '/notificacoes',
+    rotulo: 'Notificacoes',
+    icone: Bell,
+    descricao: 'Avisos enviados',
+    somenteAdmin: true,
+  },
 ];
 
 function saudacaoPorHorario(): string {
@@ -71,6 +94,7 @@ function hojePorExtenso(): string {
 export function HomePage() {
   const { estado } = useAuth();
   const perfil = estado.status === 'autenticado' ? estado.perfil : null;
+  const ehAdmin = perfil?.role === 'ADMIN';
 
   const hoje = dataDeHojeISO();
 
@@ -214,7 +238,7 @@ export function HomePage() {
           </h2>
           <p className="mb-4 text-xs text-slate-500">Para o que voce mais usa</p>
           <div className="space-y-2">
-            {ATALHOS.map((atalho) => {
+            {ATALHOS.filter((atalho) => atalho.somenteAdmin !== true || ehAdmin).map((atalho) => {
               const Icone = atalho.icone;
               return (
                 <Link

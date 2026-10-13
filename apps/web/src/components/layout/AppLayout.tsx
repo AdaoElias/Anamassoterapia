@@ -57,10 +57,10 @@ const GRUPOS: GrupoMenu[] = [
     itens: [
       { to: '/terapias', rotulo: 'Terapias', icone: Sparkles },
       { to: '/profissionais', rotulo: 'Profissionais', icone: HeartHandshake },
-      { to: '/financeiro', rotulo: 'Financeiro', icone: Wallet },
+      { to: '/financeiro', rotulo: 'Financeiro', icone: Wallet, somenteAdmin: true },
       { to: '/formularios', rotulo: 'Formularios', icone: ClipboardList },
       { to: '/contraindicacoes', rotulo: 'Contraindicacoes', icone: ShieldAlert },
-      { to: '/notificacoes', rotulo: 'Notificacoes', icone: Bell },
+      { to: '/notificacoes', rotulo: 'Notificacoes', icone: Bell, somenteAdmin: true },
       { to: '/clinica', rotulo: 'Clinica', icone: Building2 },
       { to: '/usuarios', rotulo: 'Usuarios', icone: UserCog, somenteAdmin: true },
     ],

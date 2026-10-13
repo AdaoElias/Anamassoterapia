@@ -48,9 +48,9 @@ function RotaProtegida({ children }: { children: ReactNode }) {
 }
 
 /**
- * Guarda de papel sobre `RotaProtegida`. A gestao de usuarios e so de ADMIN:
- * sem isso, um PROFISSIONAL autenticado abriria a URL na mao e veria (ou
- * tentaria) acoes que a API recusa com 403.
+ * Guarda de papel sobre `RotaProtegida`. Gestao de usuarios e financeiro sao
+ * so de ADMIN: sem isso, um PROFISSIONAL autenticado abriria a URL na mao e
+ * veria (ou tentaria) acoes que a API recusa com 403.
  */
 function RotaAdmin({ children }: { children: ReactNode }) {
   const { estado } = useAuth();
@@ -84,8 +84,22 @@ export const router = createBrowserRouter([
       { path: 'clientes/:clientId/prontuario', element: <ProntuarioPage /> },
       { path: 'formularios', element: <FormulariosPage /> },
       { path: 'contraindicacoes', element: <ContraindicacoesPage /> },
-      { path: 'financeiro', element: <FinanceiroPage /> },
-      { path: 'notificacoes', element: <NotificacoesPage /> },
+      {
+        path: 'financeiro',
+        element: (
+          <RotaAdmin>
+            <FinanceiroPage />
+          </RotaAdmin>
+        ),
+      },
+      {
+        path: 'notificacoes',
+        element: (
+          <RotaAdmin>
+            <NotificacoesPage />
+          </RotaAdmin>
+        ),
+      },
       { path: 'clinica', element: <ClinicaPage /> },
       {
         path: 'usuarios',
