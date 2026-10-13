@@ -32,7 +32,7 @@ COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/shared/package.json packages/shared/package.json
 
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+RUN --mount=type=cache,id=s/6aa6c628-1b40-41f6-b7fa-944954075a75-/pnpm/store,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
 # 2) Codigo-fonte. Mudar codigo nao invalida a camada de install acima.
