@@ -9,7 +9,7 @@ import {
 import { cn } from '@/lib/cn';
 
 const CONTROLE =
-  'w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-panel transition-colors placeholder:text-slate-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-100 focus:outline-none disabled:bg-slate-100 disabled:text-slate-500';
+  'w-full rounded-xl border border-slate-300 bg-surface px-3.5 py-2.5 text-sm text-slate-900 shadow-panel transition-colors placeholder:text-slate-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/25 focus:outline-none disabled:bg-slate-100 disabled:text-slate-500';
 
 interface CampoProps {
   label: string;
@@ -27,7 +27,7 @@ function Campo({ label, hint, error, children }: CampoProps) {
       {hint !== undefined && error === undefined ? (
         <span className="block text-xs text-slate-400">{hint}</span>
       ) : null}
-      {error !== undefined ? <span className="block text-xs text-rose-600">{error}</span> : null}
+      {error !== undefined ? <span className="block text-xs text-rose-400">{error}</span> : null}
     </label>
   );
 }

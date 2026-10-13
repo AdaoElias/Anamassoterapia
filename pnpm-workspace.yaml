@@ -48,6 +48,9 @@ catalog:
   '@fastify/rate-limit': 11.2.0
   '@fastify/cookie': 11.1.2
   '@fastify/sensible': 6.0.6
+  # Serve os arquivos do SPA (apps/web/dist) pela propria API em producao:
+  # web e API na mesma origem, sem CORS e com cookie same-site.
+  '@fastify/static': 10.1.5
   '@fastify/swagger': 9.9.0
   '@fastify/swagger-ui': 6.1.1
   prisma: 7.10.0

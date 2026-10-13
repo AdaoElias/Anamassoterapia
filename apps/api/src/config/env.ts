@@ -13,6 +13,15 @@ const booleanish = z
   .default('false')
   .transform((value) => value === 'true' || value === '1');
 
+/**
+ * Muitos provedores (Railway, Render, Heroku) injetam a porta HTTP em `PORT`
+ * e roteiam para ela. Quando nao vem, vale a porta local 3333. `API_PORT`
+ * explicito continua vencendo -- o default so cobre "ninguem definiu".
+ */
+const portaDoProvedor = Number.parseInt(process.env['PORT'] ?? '', 10);
+const portaPadrao =
+  Number.isInteger(portaDoProvedor) && portaDoProvedor > 0 ? portaDoProvedor : 3333;
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -21,10 +30,22 @@ const envSchema = z
     TEST_DATABASE_URL: z.string().optional(),
 
     API_HOST: z.string().default('127.0.0.1'),
-    API_PORT: z.coerce.number().int().min(1).max(65_535).default(3333),
+    API_PORT: z.coerce.number().int().min(1).max(65_535).default(portaPadrao),
     API_PUBLIC_URL: z.url().default('http://localhost:3333'),
     WEB_PUBLIC_URL: z.url().default('http://localhost:5173'),
     CORS_ORIGINS: z.string().default('http://localhost:5173'),
+
+    /// Prefixo sob o qual ficam as rotas de negocio. Em producao a API serve
+    /// o SPA na mesma origem, entao a API vive sob /api (o mesmo caminho que
+    /// o cliente ja usa: VITE_API_URL=/api). Em dev/test o proxy do Vite
+    /// remove o /api antes de encaminhar, entao o prefixo e vazio.
+    API_PREFIX: z
+      .string()
+      .regex(/^$|^\/[A-Za-z0-9._~/-]*$/, 'API_PREFIX deve comecar com / ou ser vazio')
+      .optional(),
+    /// Diretorio do build do SPA servido pela API em producao. Vazio usa o
+    /// caminho padrao (apps/web/dist relativo ao build da API).
+    WEB_DIST_DIR: z.string().optional(),
 
     JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET deve ter ao menos 32 caracteres'),
     JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET deve ter ao menos 32 caracteres'),
@@ -126,11 +147,20 @@ if (!parsed.success) {
 
 const raw = parsed.data;
 
+// Em producao a API vive sob /api (mesma origem do SPA); em dev/test o proxy
+// do Vite remove o /api, entao o prefixo e vazio. `API_PREFIX` explicito
+// sempre vence. A barra final e removida para nao gerar `//`.
+const apiPrefix = (raw.API_PREFIX ?? (raw.NODE_ENV === 'production' ? '/api' : '')).replace(
+  /\/+$/,
+  '',
+);
+
 export const env = {
   ...raw,
   isProduction: raw.NODE_ENV === 'production',
   isTest: raw.NODE_ENV === 'test',
   isDevelopment: raw.NODE_ENV === 'development',
+  apiPrefix,
   corsOrigins: raw.CORS_ORIGINS.split(',')
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0),

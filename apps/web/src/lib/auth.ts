@@ -67,3 +67,15 @@ export async function logout(): Promise<void> {
 export async function buscarPerfil(): Promise<Perfil> {
   return apiFetch<Perfil>('/auth/me');
 }
+
+/**
+ * Define a senha a partir do token do link de convite/redefinicao. E a mesma
+ * rota para os dois fluxos: o convite reusa o `PasswordResetToken`. Sem
+ * `skipAuthRetry` porque o erro aqui (token ruim) e 400, nao 401.
+ */
+export async function redefinirSenha(token: string, senha: string): Promise<void> {
+  await apiFetch<{ message: string }>('/auth/redefinir-senha', {
+    method: 'POST',
+    body: { token, senha },
+  });
+}

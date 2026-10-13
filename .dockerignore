@@ -1,0 +1,41 @@
+# Contexto de build do Docker.
+# Regra de ouro: nada de segredo (.env) nem de artefato reconstruivel
+# (node_modules, dist) entra na imagem.
+
+# Dependencias e build (o Docker reconstroi)
+node_modules
+**/node_modules
+dist
+**/dist
+.turbo
+**/.turbo
+coverage
+**/coverage
+*.tsbuildinfo
+
+# Segredos e ambiente (o .env.example e inofensivo e fica)
+.env
+.env.*
+!.env.example
+
+# Git, editores e SO
+.git
+.gitignore
+.gitattributes
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Documentacao, memoria e artefatos locais (nao rodam no container)
+docs
+memoria.md
+tmp
+.uploads
+*.log
+*.pdf.tmp
+iniciar.bat
+parar.bat
+Iniciar.cmd
+README.md

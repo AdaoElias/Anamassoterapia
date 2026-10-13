@@ -1,8 +1,13 @@
+import { existsSync } from 'node:fs';
+import { basename, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import fastifyCookie from '@fastify/cookie';
 import fastifyCors from '@fastify/cors';
 import fastifyHelmet from '@fastify/helmet';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifySensible from '@fastify/sensible';
+import fastifyStatic from '@fastify/static';
 import fastifySwagger from '@fastify/swagger';
 import type {
   FastifyBaseLogger,
@@ -42,6 +47,7 @@ import { professionalRoutes } from './routes/professionals.js';
 import { prontuarioRoutes } from './routes/prontuario.js';
 import { type ReadyProbe, readyRoutes } from './routes/ready.js';
 import { therapyRoutes } from './routes/therapies.js';
+import { userRoutes } from './routes/users.js';
 
 /** Tipo da app: a partir do schema Zod, request/reply/body sao tipados. */
 export type App = FastifyInstance<
@@ -143,6 +149,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<App> {
     keyGenerator: (request) => request.ip,
   });
 
+  // Em producao a API tambem serve o SPA: web e API na mesma origem (sem
+  // CORS e com cookie same-site, no mesmo dominio). O build do Vite fica em
+  // apps/web/dist; `WEB_DIST_DIR` permite fixar outro caminho (no container o
+  // dist e copiado para um diretorio conhecido). Em dev/test o Vite serve o
+  // SPA e isto fica desligado.
+  const webDistDir = env.WEB_DIST_DIR
+    ? resolve(env.WEB_DIST_DIR)
+    : fileURLToPath(new URL('../../web/dist', import.meta.url));
+  const servirSpa = env.isProduction && existsSync(resolve(webDistDir, 'index.html'));
+
   // `setErrorHandler` e `setNotFoundHandler` precisam vir **antes** do
   // registro das rotas. Em `route.js`, o RouteContext copia
   // `server[kErrorHandler]` no instante em que a rota e definida
@@ -202,6 +218,21 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<App> {
   });
 
   app.setNotFoundHandler((request: FastifyRequest, reply: FastifyReply) => {
+    const caminho = (request.raw.url ?? '').split('?')[0] ?? '';
+    const rotaDeInfra =
+      caminho === '/health' ||
+      caminho.startsWith('/health/') ||
+      caminho.startsWith('/docs') ||
+      (env.apiPrefix !== '' &&
+        (caminho === env.apiPrefix || caminho.startsWith(`${env.apiPrefix}/`)));
+
+    // SPA: navegacao do cliente (rota do react-router) que nao casou com
+    // arquivo estatico nem com a API devolve o index.html, e o react-router
+    // resolve a tela. Sem isso, um F5 em /clientes daria 404.
+    if (servirSpa && request.method === 'GET' && !rotaDeInfra) {
+      return reply.type('text/html').sendFile('index.html');
+    }
+
     reply.code(404).send({
       error: 'NOT_FOUND',
       message: `Rota ${request.method} ${request.url} nao encontrada`,
@@ -230,6 +261,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<App> {
         { name: 'health', description: 'Verificacao de saude e disponibilidade' },
         { name: 'auth', description: 'Autenticacao e refresh de token' },
         { name: 'clinic', description: 'Perfil da clinica e salas' },
+        { name: 'users', description: 'Usuarios e papeis da clinica' },
         { name: 'professionals', description: 'Cadastro de profissionais e terapias' },
         { name: 'clients', description: 'Cadastro de clientes' },
         { name: 'therapies', description: 'Cardapio de terapias' },
@@ -257,24 +289,56 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<App> {
     prefix: '/health/ready',
     ...(options.readyProbe === undefined ? {} : { probe: options.readyProbe }),
   });
-  await app.register(authRoutes, {
-    prefix: '/auth',
-    ...(options.verificarSenha === undefined ? {} : { verificarSenha: options.verificarSenha }),
-  });
-  await app.register(clinicRoutes, { prefix: '/clinics' });
-  await app.register(therapyRoutes, { prefix: '/therapies' });
-  await app.register(professionalRoutes, { prefix: '/professionals' });
-  await app.register(clientRoutes, { prefix: '/clients' });
-  await app.register(availabilityRoutes, { prefix: '/availability' });
-  await app.register(appointmentRoutes, { prefix: '/appointments' });
-  await app.register(notificationRoutes, { prefix: '/notifications' });
-  await app.register(anamnesisRoutes, { prefix: '/anamnesis' });
-  await app.register(anamnesisPublicRoutes, { prefix: '/public/anamneses' });
-  await app.register(contraindicationRoutes, { prefix: '/contraindications' });
-  await app.register(prontuarioRoutes, { prefix: '/prontuarios' });
-  await app.register(financeiroRoutes, { prefix: '/finance' });
-  // Publico, sem `requireAuth`. O slug do link e o unico seletor de tenant.
-  await app.register(portalRoutes, { prefix: '/public' });
+
+  // Toda a API de negocio vive sob `env.apiPrefix`: /api em producao (mesma
+  // origem do SPA) e vazio em dev/test (o proxy do Vite ja remove o /api). O
+  // contexto filho prefixa tudo de uma vez sem tocar em cada arquivo de rota
+  // nem no caminho que os testes injetam.
+  await app.register(
+    async (api) => {
+      await api.register(authRoutes, {
+        prefix: '/auth',
+        ...(options.verificarSenha === undefined ? {} : { verificarSenha: options.verificarSenha }),
+      });
+      await api.register(clinicRoutes, { prefix: '/clinics' });
+      await api.register(userRoutes, { prefix: '/users' });
+      await api.register(therapyRoutes, { prefix: '/therapies' });
+      await api.register(professionalRoutes, { prefix: '/professionals' });
+      await api.register(clientRoutes, { prefix: '/clients' });
+      await api.register(availabilityRoutes, { prefix: '/availability' });
+      await api.register(appointmentRoutes, { prefix: '/appointments' });
+      await api.register(notificationRoutes, { prefix: '/notifications' });
+      await api.register(anamnesisRoutes, { prefix: '/anamnesis' });
+      await api.register(anamnesisPublicRoutes, { prefix: '/public/anamneses' });
+      await api.register(contraindicationRoutes, { prefix: '/contraindications' });
+      await api.register(prontuarioRoutes, { prefix: '/prontuarios' });
+      await api.register(financeiroRoutes, { prefix: '/finance' });
+      // Publico, sem `requireAuth`. O slug do link e o unico seletor de tenant.
+      await api.register(portalRoutes, { prefix: '/public' });
+    },
+    env.apiPrefix === '' ? {} : { prefix: env.apiPrefix },
+  );
+
+  if (servirSpa) {
+    await app.register(fastifyStatic, {
+      root: webDistDir,
+      index: ['index.html'],
+      // O index.html nunca pode ser cacheado (o browser ficaria preso numa
+      // versao antiga do app); os assets sob /assets tem hash no nome, entao
+      // sao imutaveis e podem ser cacheados por um ano.
+      setHeaders: (reply, filePath) => {
+        if (basename(filePath) === 'index.html') {
+          reply.header('Cache-Control', 'no-cache');
+          return;
+        }
+        if (filePath.includes(`${sep}assets${sep}`)) {
+          reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+          return;
+        }
+        reply.header('Cache-Control', 'public, max-age=3600');
+      },
+    });
+  }
 
   // Contrapartida do `iniciarFila` de `index.ts`: o worker fecha junto com o
   // servidor, antes do processo morrer. Nos testes isso e no-op, porque a

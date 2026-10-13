@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Massoterapia · Direcoes de UI</title>
+    <style>
+      /* ============================================================
+         Preview estatico das duas direcoes visuais do painel.
+         Nao faz parte do build: serve so para escolha. As duas
+         direcoes usam os mesmos tokens semanticos do app
+         (brand / accent / neutrals), entao trocar a paleta no
+         index.css repinta o app inteiro.
+         ============================================================ */
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --font-ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      }
+
+      body {
+        font-family: var(--font-ui);
+        background: #0a0c12;
+        color: #e7e9f0;
+        -webkit-font-smoothing: antialiased;
+        line-height: 1.4;
+      }
+
+      .topbar {
+        position: sticky; top: 0; z-index: 50;
+        display: flex; align-items: center; gap: 18px;
+        padding: 14px 28px;
+        background: rgba(10,12,18,.82);
+        backdrop-filter: blur(12px);
+        border-bottom: 1px solid rgba(255,255,255,.08);
+      }
+      .topbar h1 { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+      .topbar p { font-size: 12px; color: #8b91a7; }
+      .topbar a {
+        color: #9fb0ff; text-decoration: none; font-size: 12px; font-weight: 600;
+        border: 1px solid rgba(255,255,255,.14); padding: 7px 12px; border-radius: 999px;
+      }
+      .topbar a:hover { background: rgba(255,255,255,.06); }
+
+      .legend {
+        max-width: 1180px; margin: 26px auto 0; padding: 0 20px;
+        display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
+      }
+      .legend > div {
+        border: 1px solid rgba(255,255,255,.1); border-radius: 14px;
+        padding: 16px 18px; background: rgba(255,255,255,.03);
+      }
+      .legend strong { font-size: 13px; }
+      .legend span { display: block; font-size: 12px; color: #9aa0b6; margin-top: 4px; }
+
+      .stage { max-width: 1180px; margin: 22px auto 60px; padding: 0 20px; }
+      .stage-title {
+        display: flex; align-items: center; gap: 12px; margin: 34px 0 14px;
+      }
+      .stage-title .tag {
+        font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+        padding: 5px 10px; border-radius: 999px;
+      }
+      .stage-title h2 { font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
+      .stage-title p { font-size: 12.5px; color: #8b91a7; }
+
+      /* ---------------- App shell (comum) ---------------- */
+      .app {
+        display: grid; grid-template-columns: 244px 1fr;
+        min-height: 720px; border-radius: 18px; overflow: hidden;
+        border: 1px solid rgba(255,255,255,.1);
+      }
+      .app .side { display: flex; flex-direction: column; }
+      .app .brand { display: flex; align-items: center; gap: 11px; padding: 20px 18px 16px; }
+      .app .brand .logo {
+        width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center;
+        font-weight: 800; font-size: 15px; flex-shrink: 0;
+      }
+      .app .brand .name { font-size: 14.5px; font-weight: 700; letter-spacing: -.01em; }
+      .app .brand .sub { font-size: 10.5px; letter-spacing: .02em; }
+      .app nav { flex: 1; padding: 8px 12px; display: flex; flex-direction: column; gap: 3px; }
+      .app nav .group {
+        font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+        padding: 14px 10px 6px;
+      }
+      .app nav a {
+        display: flex; align-items: center; gap: 10px; text-decoration: none;
+        font-size: 13px; font-weight: 600; padding: 9px 11px; border-radius: 9px;
+        transition: background .15s, color .15s;
+      }
+      .app nav a .ico { width: 16px; height: 16px; flex-shrink: 0; opacity: .85; }
+      .app .side-foot { padding: 14px; display: flex; align-items: center; gap: 10px; }
+      .app .side-foot .me {
+        width: 34px; height: 34px; border-radius: 999px; display: grid; place-items: center;
+        font-size: 12px; font-weight: 800; flex-shrink: 0;
+      }
+      .app .side-foot .who { font-size: 12.5px; font-weight: 600; line-height: 1.2; }
+      .app .side-foot .who small { display: block; font-weight: 500; font-size: 11px; }
+
+      .app .content { padding: 26px 30px; min-width: 0; }
+      .app .content .head {
+        display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px;
+      }
+      .app .content .head h3 { font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+      .app .content .head p { font-size: 13px; margin-top: 3px; }
+
+      .app .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+      .app .kpi { border-radius: 13px; padding: 15px 16px; }
+      .app .kpi .k-top { display: flex; align-items: center; justify-content: space-between; }
+      .app .kpi .k-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+      .app .kpi .k-num { font-size: 26px; font-weight: 800; letter-spacing: -.03em; margin-top: 8px; }
+      .app .kpi .k-delta { font-size: 11.5px; margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+      .app .kpi .k-chip {
+        width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; font-size: 14px;
+      }
+
+      .app .cols { display: grid; grid-template-columns: 1.7fr 1fr; gap: 18px; }
+      .app .card { border-radius: 13px; padding: 18px; }
+      .app .card h4 { font-size: 14.5px; font-weight: 700; }
+      .app .card .card-sub { font-size: 11.5px; margin-top: 2px; }
+      .app .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+      .app .link { font-size: 12px; font-weight: 700; }
+
+      .app table { width: 100%; border-collapse: collapse; }
+      .app table th {
+        text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em;
+        font-weight: 800; padding: 8px 10px; border-bottom: 1px solid; }
+      .app table td { padding: 11px 10px; font-size: 12.5px; border-bottom: 1px solid; }
+      .app table td:first-child, .app table th:first-child { padding-left: 4px; }
+      .app .time { font-variant-numeric: tabular-nums; font-weight: 600; }
+      .app .who-cell { display: flex; align-items: center; gap: 9px; }
+      .app .mini-av {
+        width: 27px; height: 27px; border-radius: 999px; display: grid; place-items: center;
+        font-size: 10px; font-weight: 800; flex-shrink: 0;
+      }
+      .app .who-cell small { display: block; font-size: 11px; }
+
+      .app .pill {
+        display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;
+        padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+      }
+      .app .pill .dot { width: 5px; height: 5px; border-radius: 999px; }
+
+      /* Formulario lateral */
+      .app .field { margin-bottom: 12px; }
+      .app .field label { display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 5px; }
+      .app .field .input {
+        border-radius: 9px; padding: 9px 11px; font-size: 12.5px; border: 1px solid;
+        display: flex; align-items: center; justify-content: space-between;
+      }
+      .app .field .input .caret { opacity: .5; font-size: 9px; }
+      .app .slot-row { display: flex; flex-wrap: wrap; gap: 7px; margin: 4px 0 14px; }
+      .app .slot {
+        font-size: 11.5px; font-weight: 700; padding: 6px 11px; border-radius: 8px; border: 1px solid;
+      }
+      .app .btn-row { display: flex; gap: 9px; justify-content: flex-end; margin-top: 6px; }
+      .app .btn {
+        font-size: 12.5px; font-weight: 700; padding: 9px 16px; border-radius: 9px; border: 1px solid transparent;
+        cursor: default;
+      }
+
+      /* ============================================================
+         DIRECAO A — Classico corporativo (monocromia + azul)
+         ============================================================ */
+      .theme-a { background: #f3f5f9; }
+      .theme-a .side { background: #ffffff; border-right: 1px solid #e3e8f0; }
+      .theme-a .brand .logo { background: #1d4ed8; color: #fff; }
+      .theme-a .brand .name { color: #0f172a; }
+      .theme-a .brand .sub { color: #94a3b8; }
+      .theme-a nav .group { color: #a3adc2; }
+      .theme-a nav a { color: #566176; }
+      .theme-a nav a:hover { background: #f1f5fb; color: #1e293b; }
+      .theme-a nav a.active { background: #eef3ff; color: #1d4ed8; }
+      .theme-a nav a.active .ico { opacity: 1; }
+      .theme-a .side-foot { border-top: 1px solid #eef1f6; }
+      .theme-a .side-foot .me { background: #1d4ed8; color: #fff; }
+      .theme-a .side-foot .who { color: #1e293b; }
+      .theme-a .side-foot .who small { color: #94a3b8; }
+      .theme-a .content { color: #0f172a; }
+      .theme-a .content .head h3 { color: #0b1220; }
+      .theme-a .content .head p { color: #64748b; }
+      .theme-a .kpi { background: #fff; border: 1px solid #e6eaf2; }
+      .theme-a .kpi .k-label { color: #6b7688; }
+      .theme-a .kpi .k-num { color: #0b1220; }
+      .theme-a .kpi .k-delta { color: #16a34a; }
+      .theme-a .kpi .k-chip { background: #eef3ff; color: #1d4ed8; }
+      .theme-a .kpi .k-chip.grey { background: #f1f4f9; color: #64748b; }
+      .theme-a .card { background: #fff; border: 1px solid #e6eaf2; }
+      .theme-a .card .card-sub { color: #94a3b8; }
+      .theme-a .link { color: #1d4ed8; }
+      .theme-a table th { color: #8a94a8; border-color: #eef1f6; }
+      .theme-a table td { color: #334155; border-color: #f1f4f9; }
+      .theme-a table tr:hover td { background: #f8fafd; }
+      .theme-a .who-cell small { color: #94a3b8; }
+      .theme-a .mini-av { background: #e2e8f0; color: #475569; }
+      .theme-a .pill.ok { background: #e8f6ee; color: #157347; }
+      .theme-a .pill.wait { background: #fff4e3; color: #9a6206; }
+      .theme-a .pill.info { background: #e8efff; color: #1d4ed8; }
+      .theme-a .pill.neutral { background: #f1f4f9; color: #64748b; }
+      .theme-a .field label { color: #475569; }
+      .theme-a .field .input { background: #fff; border-color: #dce2ec; color: #1e293b; }
+      .theme-a .slot { background: #fff; border-color: #dce2ec; color: #475569; }
+      .theme-a .slot.on { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+      .theme-a .btn.primary { background: #1d4ed8; color: #fff; }
+      .theme-a .btn.ghost { background: #fff; border-color: #dce2ec; color: #475569; }
+
+      /* ============================================================
+         DIRECAO B — Arrojado (shell escuro + acento vivo)
+         ============================================================ */
+      .theme-b { background: #0b0f1c; color: #e9ecff; }
+      .theme-b .side { background: #0e1428; border-right: 1px solid rgba(255,255,255,.07); }
+      .theme-b .brand .logo {
+        background: linear-gradient(135deg, #6366f1, #d946ef); color: #fff;
+        box-shadow: 0 8px 22px -8px rgba(99,102,241,.9);
+      }
+      .theme-b .brand .name { color: #fff; }
+      .theme-b .brand .sub { color: #7b84ab; }
+      .theme-b nav .group { color: #59608a; }
+      .theme-b nav a { color: #9aa3c7; }
+      .theme-b nav a:hover { background: rgba(255,255,255,.06); color: #fff; }
+      .theme-b nav a.active {
+        background: linear-gradient(135deg, rgba(99,102,241,.35), rgba(217,70,239,.25));
+        color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12);
+      }
+      .theme-b nav a.active .ico { opacity: 1; }
+      .theme-b .side-foot { border-top: 1px solid rgba(255,255,255,.07); }
+      .theme-b .side-foot .me { background: linear-gradient(135deg, #6366f1, #d946ef); color: #fff; }
+      .theme-b .side-foot .who { color: #fff; }
+      .theme-b .side-foot .who small { color: #7b84ab; }
+      .theme-b .content .head h3 { color: #fff; }
+      .theme-b .content .head p { color: #8b93b8; }
+      .theme-b .kpi {
+        background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+        border: 1px solid rgba(255,255,255,.09); position: relative; overflow: hidden;
+      }
+      .theme-b .kpi::before {
+        content: ''; position: absolute; inset: 0 auto auto 0; height: 3px; width: 100%;
+        background: linear-gradient(90deg, #6366f1, #d946ef); opacity: .9;
+      }
+      .theme-b .kpi .k-label { color: #9aa3c7; }
+      .theme-b .kpi .k-num { color: #fff; }
+      .theme-b .kpi .k-delta { color: #34d399; }
+      .theme-b .kpi .k-chip { background: rgba(99,102,241,.22); color: #a5b4fc; }
+      .theme-b .kpi .k-chip.pink { background: rgba(217,70,239,.2); color: #f0abfc; }
+      .theme-b .kpi .k-chip.grey { background: rgba(255,255,255,.08); color: #c7cdf0; }
+      .theme-b .card {
+        background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+        border: 1px solid rgba(255,255,255,.09);
+      }
+      .theme-b .card .card-sub { color: #8b93b8; }
+      .theme-b .link { color: #a5b4fc; }
+      .theme-b table th { color: #7b84ab; border-color: rgba(255,255,255,.08); }
+      .theme-b table td { color: #cdd3ef; border-color: rgba(255,255,255,.06); }
+      .theme-b table tr:hover td { background: rgba(255,255,255,.03); }
+      .theme-b .who-cell small { color: #8b93b8; }
+      .theme-b .mini-av { background: linear-gradient(135deg, #6366f1, #d946ef); color: #fff; }
+      .theme-b .pill.ok { background: rgba(52,211,153,.16); color: #6ee7b7; }
+      .theme-b .pill.wait { background: rgba(251,191,36,.16); color: #fcd34d; }
+      .theme-b .pill.info { background: rgba(99,102,241,.24); color: #c7d2fe; }
+      .theme-b .pill.neutral { background: rgba(255,255,255,.08); color: #b6bcd8; }
+      .theme-b .field label { color: #9aa3c7; }
+      .theme-b .field .input {
+        background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.12); color: #e9ecff;
+      }
+      .theme-b .slot { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.12); color: #c7cdf0; }
+      .theme-b .slot.on {
+        background: linear-gradient(135deg, #6366f1, #d946ef); border-color: transparent; color: #fff;
+        box-shadow: 0 8px 20px -8px rgba(139,92,246,.9);
+      }
+      .theme-b .btn.primary {
+        background: linear-gradient(135deg, #6366f1, #d946ef); color: #fff;
+        box-shadow: 0 10px 24px -10px rgba(139,92,246,.9);
+      }
+      .theme-b .btn.ghost { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.14); color: #c7cdf0; }
+
+      .tag-a { background: #1d4ed8; color: #fff; }
+      .tag-b { background: linear-gradient(135deg, #6366f1, #d946ef); color: #fff; }
+
+      @media (max-width: 900px) {
+        .legend { grid-template-columns: 1fr; }
+        .app { grid-template-columns: 1fr; }
+        .app .side { display: none; }
+        .app .kpis { grid-template-columns: repeat(2, 1fr); }
+        .app .cols { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Massoterapia · direcoes de interface</h1>
+        <p>Mesma tela, mesmos componentes, duas peles. Escolha uma direcao.</p>
+      </div>
+      <div style="flex:1"></div>
+      <a href="#direcao-a">Direcao A</a>
+      <a href="#direcao-b">Direcao B</a>
+    </header>
+
+    <section class="legend">
+      <div>
+        <strong>Direcao A · Classico corporativo</strong>
+        <span>Monocromia de cinzas + azul unico. Densidade alta, tabelas de verdade, bordas finas, tipografia de sistema. Transmite confianca e seriedade — o padrao de software de gestao.</span>
+      </div>
+      <div>
+        <strong>Direcao B · Arrojado</strong>
+        <span>Shell escuro, gradiente indigo→magenta, cartoes de vidro e brilho. Visual contemporaneo de produto SaaS. Mais memoravel, mais "app que da gosto de usar".</span>
+      </div>
+    </section>
+
+    <main class="stage">
+      <!-- ================= DIRECAO A ================= -->
+      <div class="stage-title" id="direcao-a">
+        <span class="tag tag-a">Direcao A</span>
+        <div>
+          <h2>Classico corporativo (monocromia + azul)</h2>
+          <p>Confianca, clareza e foco no dado. Sem cor decorativa alem do azul.</p>
+        </div>
+      </div>
+
+      <div class="app theme-a">
+        <aside class="side">
+          <div class="brand">
+            <div class="logo">M</div>
+            <div>
+              <div class="name">Massoterapia</div>
+              <div class="sub">Gestao da clinica</div>
+            </div>
+          </div>
+          <nav>
+            <div class="group">Inicio</div>
+            <a class="active" href="#direcao-a"><span class="ico">▦</span> Painel</a>
+            <div class="group">Atendimento</div>
+            <a href="#direcao-a"><span class="ico">▤</span> Agenda</a>
+            <a href="#direcao-a"><span class="ico">◔</span> Disponibilidade</a>
+            <a href="#direcao-a"><span class="ico">◍</span> Clientes</a>
+            <div class="group">Gestao</div>
+            <a href="#direcao-a"><span class="ico">✦</span> Terapias</a>
+            <a href="#direcao-a"><span class="ico">♥</span> Profissionais</a>
+            <a href="#direcao-a"><span class="ico">▣</span> Financeiro</a>
+          </nav>
+          <div class="side-foot">
+            <div class="me">AC</div>
+            <div class="who">Ana Costa<small>Administracao</small></div>
+          </div>
+        </aside>
+
+        <div class="content">
+          <div class="head">
+            <div>
+              <h3>Agenda de hoje</h3>
+              <p>Terca-feira, 13 de outubro · 12 sessoes</p>
+            </div>
+            <div class="btn primary">+ Nova sessao</div>
+          </div>
+
+          <div class="kpis">
+            <div class="kpi">
+              <div class="k-top">
+                <div class="k-label">Sessoes hoje</div>
+                <div class="k-chip">▤</div>
+              </div>
+              <div class="k-num">12</div>
+              <div class="k-delta">↑ 3 vs. ontem</div>
+            </div>
+            <div class="kpi">
+              <div class="k-top">
+                <div class="k-label">Confirmadas</div>
+                <div class="k-chip grey">✓</div>
+              </div>
+              <div class="k-num">9</div>
+              <div class="k-delta">3 aguardando</div>
+            </div>
+            <div class="kpi">
+              <div class="k-top">
+                <div class="k-label">Receita prevista</div>
+                <div class="k-chip">R$</div>
+              </div>
+              <div class="k-num">R$ 2.180</div>
+              <div class="k-delta">↑ 8% no mes</div>
+            </div>
+            <div class="kpi">
+              <div class="k-top">
+                <div class="k-label">A receber</div>
+                <div class="k-chip grey">⏳</div>
+              </div>
+              <div class="k-num">R$ 640</div>
+              <div class="k-delta" style="color:#94a3b8">2 lancamentos</div>
+            </div>
+          </div>
+
+          <div class="cols">
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h4>Agenda do dia</h4>
+                  <div class="card-sub">9 confirmadas · 2 pendentes · 1 cancelada</div>
+                </div>
+                <a class="link" href="#direcao-a">Ver agenda →</a>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Horario</th>
+                    <th>Cliente</th>
+                    <th>Terapia</th>
+                    <th>Profissional</th>
+                    <th>Valor</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="time">09:00</td>
+                    <td>
+                      <div class="who-cell"><span class="mini-av">MC</span><span>Marina Costa<small>3 sessoes</small></span></div>
+                    </td>
+                    <td>Drenagem linfatica</td>
+                    <td>Paulo Reis</td>
+                    <td class="time">R$ 180</td>
+                    <td><span class="pill ok"><span class="dot" style="background:#157347"></span>Confirmada</span></td>
+                  </tr>
+                  <tr>
+                    <td class="time">10:30</td>
+                    <td>
+                      <div class="who-cell"><span class="mini-av">JS</span><span>Joao Souza<small>1 sessao</small></span></div>
+                    </td>
+                    <td>Shiatsu terapeutico</td>
+                    <td>Ana Costa</td>
+                    <td class="time">R$ 200</td>
+                    <td><span class="pill wait"><span class="dot" style="background:#9a6206"></span>Pendente</span></td>
+                  </tr>
+                  <tr>
+                    <td class="time">11:00</td>
+                    <td>
+                      <div class="who-cell"><span class="mini-av">LM</span><span>Luiza Melo<small>2 sessoes</small></span></div>
+                    </td>
+                    <td>Massagem relaxante</td>
+                    <td>Paulo Reis</td>
+                    <td class="time">R$ 150</td>
+                    <td><span class="pill info"><span class="dot" style="background:#1d4ed8"></span>Em atendimento</span></td>
+                  </tr>
+                  <tr>
+                    <td class="time">14:00</td>
+                    <td>
+                      <div class="who-cell"><span class="mini-av">RB</span><span>Rafael Braga<small>primeira vez</small></span></div>
+                    </td>
+                    <td>Pedras quentes</td>
+                    <td>Ana Costa</td>
+                    <td class="time">R$ 240</td>
+                    <td><span class="pill ok"><span class="dot" style="background:#157347"></span>Confirmada</span></td>
+                  </tr>
+                  <tr>
+                    <td class="time">15:00</td>
+                    <td>
+                      <div class="who-cell"><span class="mini-av">CN</span><span>Carla Nunes<small>4 sessoes</small></span></div>
+                    </td>
+                    <td>Drenagem linfatica</td>
+                    <td>Ana Costa</td>
+                    <td class="time">R$ 180</td>
+                    <td><span class="pill neutral"><span class="dot" style="background:#64748b"></span>Cancelada</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="card">
+              <h4>Nova sessao</h4>
+              <div class="card-sub">Agendamento rapido pelo balcao</div>
+              <div style="height:14px"></div>
+              <div class="field">
+                <label>Cliente</label>
+                <div class="input">Marina Costa <span class="caret">▼</span></div>
+              </div>
+              <div class="field">
+                <label>Terapia</label>
+                <div class="input">Drenagem linfatica <span class="caret">▼</span></div>
+              </div>
+              <div class="field">
+                <label>Profissional</label>
+                <div class="input">Paulo Reis <span class="caret">▼</span></div>
+              </div>
+              <div class="field">
+                <label>Horario disponivel</label>
+              </div>
+              <div class="slot-row">
+                <div class="slot on">09:00</div>
+                <div class="slot">09:30</div>
+                <div class="slot">10:00</div>
+                <div class="slot">11:30</div>
+              </div>
+              <div class="btn-row">
+                <div class="btn ghost">Cancelar</div>
+                <div class="btn primary">Agendar</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= DIRECAO B ================= -->
+      <div class="stage-title" id="direcao-b">
+        <span class="tag tag-b">Direcao B</span>
+        <div>
+          <h2>Arrojado</h2>
+          <p>Shell escuro, gradiente vivo e cartoes de vidro. Impacto e personalidade.</p>
+        </div>
+      </div>
+
+      <div class="app theme-b">
+        <aside class="side">
+          <div class="brand">
+            <div class="logo">M</div>
+            <div>
+              <div class="name">Massoterapia</div>
+              <div class="sub">Gestao da clinica</div>
+            </div>
+          </div>
+          <nav>
+            <div class="group">Inicio</div>
+            <a class="active" href="#direcao-b"><span class="ico">▦</span> Painel</a>
+            <div class="group">Atendimento</div>
+            <a href="#direcao-b"><span class="ico">▤</span> Agenda</a>
+            <a href="#direcao-b"><span class="ico">◔</span> Disponibilidade</a>
+            <a href="#direcao-b"><span class="ico">◍</span> Clientes</a>
+            <div class="group">Gestao</div>
+            <a href="#direcao-b"><span class="ico">✦</span> Terapias</a>
+            <a href="#direcao-b"><span class="ico">♥</span> Profissionais</a>
+            <a href="#direcao-b"><span class="ico">▣</span> Financeiro</a>
+          </nav>
+          <div class="side-foot">
+            <div class="me">AC</div>
+            <div class="who">Ana Costa<small>Administracao</small></div>
+          </div>
+        </aside>
+
+        <div class="content">
+          <div class="head">
+            <div>
+              <h3>Agenda de hoje</h3>
+              <p>Terca-feira, 13 de outubro · 12 sessoes</p>
+            </div>
+            <div class="btn primary">+ Nova sessao</div>
+          </div>
+
+          <div class="kpis">
+            <div class="kpi">
+              <div class="k-top">
+                <div class="k-label">Sessoes hoje</div>
+                <div class="k-chip">▤</div>
+              </div>
+              <div class="k-num">12</div>
+              <div class="k-delta">↑ 3 vs. ontem</div>
+            </div>
+            <div class="kpi">
+              <div class="k-top">
+                <div class="k-label">Confirmadas</div>
+                <div class="k-chip pink">✓</div>
+              </div>
+              <div class="k-num">9</div>
+              <div class="k-delta" style="color:#8b93b8">3 aguardando</div>
+            </div>
+            <div class="kpi">
+              <div class="k-top">
+                <div class="k-label">Receita prevista</div>
+                <div class="k-chip grey">R$</div>
+              </div>
+              <div class="k-num">R$ 2.180</div>
+              <div class="k-delta">↑ 8% no mes</div>
+            </div>
+            <div class="kpi">
+              <div class="k-top">
+                <div class="k-label">A receber</div>
+                <div class="k-chip grey">⏳</div>
+              </div>
+              <div class="k-num">R$ 640</div>
+              <div class="k-delta" style="color:#8b93b8">2 lancamentos</div>
+            </div>
+          </div>
+
+          <div class="cols">
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h4>Agenda do dia</h4>
+                  <div class="card-sub">9 confirmadas · 2 pendentes · 1 cancelada</div>
+                </div>
+                <a class="link" href="#direcao-b">Ver agenda →</a>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Horario</th>
+                    <th>Cliente</th>
+                    <th>Terapia</th>
+                    <th>Profissional</th>
+                    <th>Valor</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="time">09:00</td>
+                    <td>
+                      <div class="who-cell"><span class="mini-av">MC</span><span>Marina Costa<small>3 sessoes</small></span></div>
+                    </td>
+                    <td>Drenagem linfatica</td>
+                    <td>Paulo Reis</td>
+                    <td class="time">R$ 180</td>
+                    <td><span class="pill ok"><span class="dot" style="background:#6ee7b7"></span>Confirmada</span></td>
+                  </tr>
+                  <tr>
+                    <td class="time">10:30</td>
+                    <td>
+                      <div class="who-cell"><span class="mini-av">JS</span><span>Joao Souza<small>1 sessao</small></span></div>
+                    </td>
+                    <td>Shiatsu terapeutico</td>
+                    <td>Ana Costa</td>
+                    <td class="time">R$ 200</td>
+                    <td><span class="pill wait"><span class="dot" style="background:#fcd34d"></span>Pendente</span></td>
+                  </tr>
+                  <tr>
+                    <td class="time">11:00</td>
+                    <td>
+                      <div class="who-cell"><span class="mini-av">LM</span><span>Luiza Melo<small>2 sessoes</small></span></div>
+                    </td>
+                    <td>Massagem relaxante</td>
+                    <td>Paulo Reis</td>
+                    <td class="time">R$ 150</td>
+                    <td><span class="pill info"><span class="dot" style="background:#c7d2fe"></span>Em atendimento</span></td>
+                  </tr>
+                  <tr>
+                    <td class="time">14:00</td>
+                    <td>
+                      <div class="who-cell"><span class="mini-av">RB</span><span>Rafael Braga<small>primeira vez</small></span></div>
+                    </td>
+                    <td>Pedras quentes</td>
+                    <td>Ana Costa</td>
+                    <td class="time">R$ 240</td>
+                    <td><span class="pill ok"><span class="dot" style="background:#6ee7b7"></span>Confirmada</span></td>
+                  </tr>
+                  <tr>
+                    <td class="time">15:00</td>
+                    <td>
+                      <div class="who-cell"><span class="mini-av">CN</span><span>Carla Nunes<small>4 sessoes</small></span></div>
+                    </td>
+                    <td>Drenagem linfatica</td>
+                    <td>Ana Costa</td>
+                    <td class="time">R$ 180</td>
+                    <td><span class="pill neutral"><span class="dot" style="background:#b6bcd8"></span>Cancelada</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="card">
+              <h4>Nova sessao</h4>
+              <div class="card-sub">Agendamento rapido pelo balcao</div>
+              <div style="height:14px"></div>
+              <div class="field">
+                <label>Cliente</label>
+                <div class="input">Marina Costa <span class="caret">▼</span></div>
+              </div>
+              <div class="field">
+                <label>Terapia</label>
+                <div class="input">Drenagem linfatica <span class="caret">▼</span></div>
+              </div>
+              <div class="field">
+                <label>Profissional</label>
+                <div class="input">Paulo Reis <span class="caret">▼</span></div>
+              </div>
+              <div class="field">
+                <label>Horario disponivel</label>
+              </div>
+              <div class="slot-row">
+                <div class="slot on">09:00</div>
+                <div class="slot">09:30</div>
+                <div class="slot">10:00</div>
+                <div class="slot">11:30</div>
+              </div>
+              <div class="btn-row">
+                <div class="btn ghost">Cancelar</div>
+                <div class="btn primary">Agendar</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

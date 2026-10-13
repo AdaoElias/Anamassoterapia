@@ -10,10 +10,11 @@ const BASE =
 
 const VARIANTES: Record<Variante, string> = {
   primaria:
-    'bg-gradient-to-b from-brand-600 to-brand-700 text-white shadow-panel hover:from-brand-500 hover:to-brand-600 hover:shadow-lift',
+    'bg-gradient-to-br from-brand-600 to-clay-400 text-white shadow-glow hover:brightness-110 hover:shadow-lift',
   secundaria:
-    'border border-slate-300/90 bg-white text-slate-700 shadow-panel hover:border-brand-300 hover:bg-brand-50/70 hover:text-brand-800',
-  perigo: 'border border-clay-300 bg-white text-clay-700 hover:border-clay-400 hover:bg-clay-50',
+    'border border-slate-300/90 bg-surface text-slate-700 shadow-panel hover:border-brand-400 hover:bg-brand-50/70 hover:text-brand-900',
+  perigo:
+    'border border-rose-500/40 bg-surface text-rose-300 hover:border-rose-400 hover:bg-rose-500/10 hover:text-rose-200',
   fantasma: 'text-slate-600 hover:bg-brand-100/60 hover:text-brand-900',
 };
 

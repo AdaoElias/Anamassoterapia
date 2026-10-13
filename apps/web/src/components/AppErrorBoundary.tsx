@@ -49,7 +49,7 @@ export class AppErrorBoundary extends Component<Props, State> {
           onClick={() => {
             window.location.reload();
           }}
-          className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none"
+          className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-glow hover:bg-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none"
         >
           Recarregar
         </button>

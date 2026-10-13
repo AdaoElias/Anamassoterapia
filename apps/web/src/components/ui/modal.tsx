@@ -41,7 +41,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={titulo}
-        className="relative mt-10 w-full max-w-2xl animate-panel-up rounded-3xl bg-white shadow-lift"
+        className="relative mt-10 w-full max-w-2xl animate-panel-up rounded-3xl bg-surface shadow-lift"
       >
         <div className="flex items-center justify-between gap-4 px-6 py-4">
           <h2 className="font-display text-lg font-semibold tracking-tight text-slate-900">

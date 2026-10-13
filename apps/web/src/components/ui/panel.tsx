@@ -27,7 +27,10 @@ export function PageHeader({
 export function Panel({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <section
-      className={cn('rounded-2xl border border-slate-200/80 bg-white p-6 shadow-panel', className)}
+      className={cn(
+        'rounded-2xl border border-slate-200/80 bg-surface p-6 shadow-panel',
+        className,
+      )}
     >
       {children}
     </section>
@@ -55,7 +58,7 @@ export function CardMetrica({
         ? 'bg-brand-100 text-brand-700'
         : 'bg-slate-100 text-slate-600';
   return (
-    <div className="flex items-start gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-panel">
+    <div className="flex items-start gap-4 rounded-2xl border border-slate-200/80 bg-surface p-5 shadow-panel">
       <div className={`grid size-11 shrink-0 place-items-center rounded-full ${chip}`}>{icone}</div>
       <div className="min-w-0">
         <p className="font-display text-2xl font-medium tracking-tight text-slate-900">{valor}</p>
@@ -80,7 +83,7 @@ export function CaixaErro({ mensagem }: { mensagem: string }) {
   return (
     <p
       role="alert"
-      className="rounded-xl border border-rose-100 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700"
+      className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-sm text-rose-300"
     >
       {mensagem}
     </p>

@@ -209,7 +209,7 @@ export function NotificacoesPage() {
                         <span className="line-clamp-2">{notificacao.body}</span>
                       </span>
                       {notificacao.lastError !== null ? (
-                        <span className="mt-1 block max-w-md text-xs text-rose-600">
+                        <span className="mt-1 block max-w-md text-xs text-rose-400">
                           {notificacao.lastError}
                         </span>
                       ) : null}

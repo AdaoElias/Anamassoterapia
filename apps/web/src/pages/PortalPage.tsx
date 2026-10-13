@@ -335,7 +335,7 @@ function CartaoTerapia({
       className={`w-full rounded-md border px-3 py-3 text-left transition-colors ${
         selecionada
           ? 'border-brand-400 bg-brand-50'
-          : 'border-slate-200 bg-white hover:border-brand-300 hover:bg-brand-50/50'
+          : 'border-slate-200 bg-surface hover:border-brand-300 hover:bg-brand-50/50'
       }`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -376,7 +376,7 @@ function CartaoProfissional({
       className={`w-full rounded-md border px-3 py-3 text-left transition-colors ${
         selecionado
           ? 'border-brand-400 bg-brand-50'
-          : 'border-slate-200 bg-white hover:border-brand-300 hover:bg-brand-50/50'
+          : 'border-slate-200 bg-surface hover:border-brand-300 hover:bg-brand-50/50'
       }`}
     >
       <span className="font-medium text-slate-900">{profissional.name}</span>

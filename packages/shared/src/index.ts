@@ -16,6 +16,7 @@ export * from './schemas/portal.js';
 export * from './schemas/professional.js';
 export * from './schemas/room.js';
 export * from './schemas/therapy.js';
+export * from './schemas/user.js';
 export * from './utils/brazilian.js';
 export * from './utils/datetime.js';
 export * from './utils/slug.js';

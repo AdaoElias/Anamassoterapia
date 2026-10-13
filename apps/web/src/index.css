@@ -1,15 +1,7 @@
 @import 'tailwindcss';
 
-/* Tipografia self-hosted (variavel, latin): Fraunces para display, Manrope
-   para UI. Nenhuma dependencia de CDN no runtime, funciona offline. */
-@font-face {
-  font-family: 'Fraunces';
-  font-style: normal;
-  font-weight: 400 600;
-  font-display: swap;
-  src: url('/fonts/fraunces-var.woff2') format('woff2');
-}
-
+/* Tipografia de sistema/UI. O tema "arrojado" usa uma display sans (Manrope)
+   tambem para titulos, entao `font-display` aponta para a mesma familia. */
 @font-face {
   font-family: 'Manrope';
   font-style: normal;
@@ -19,54 +11,66 @@
 }
 
 @theme {
-  /* --- Primaria: salvia (cresci, calmante, organica) --- */
-  --color-brand-50: oklch(0.978 0.023 156);
-  --color-brand-100: oklch(0.955 0.038 154);
-  --color-brand-200: oklch(0.918 0.058 152);
-  --color-brand-300: oklch(0.854 0.074 150);
-  --color-brand-400: oklch(0.76 0.086 148);
-  --color-brand-500: oklch(0.638 0.089 145);
-  --color-brand-600: oklch(0.53 0.077 142);
-  --color-brand-700: oklch(0.458 0.068 140);
-  --color-brand-800: oklch(0.395 0.057 138);
-  --color-brand-900: oklch(0.338 0.048 136);
-  --color-brand-950: oklch(0.264 0.04 134);
+  /* ==================================================================
+     Tema "Arrojado": shell escuro com acento indigo -> magenta.
+     Os nomes (brand / clay / slate) sao os mesmos usados pelo app; so
+     os valores mudam, entao trocar aqui repinta o app inteiro.
+     ================================================================== */
 
-  /* --- Acento: argila/terracota (calor humano) --- */
-  --color-clay-50: oklch(0.98 0.018 45);
-  --color-clay-100: oklch(0.958 0.034 45);
-  --color-clay-200: oklch(0.912 0.053 43);
-  --color-clay-300: oklch(0.848 0.073 42);
-  --color-clay-400: oklch(0.749 0.09 39);
-  --color-clay-500: oklch(0.648 0.098 36);
-  --color-clay-600: oklch(0.565 0.087 34);
-  --color-clay-700: oklch(0.492 0.072 32);
-  --color-clay-800: oklch(0.422 0.056 30);
-  --color-clay-900: oklch(0.366 0.043 28);
+  /* --- Primaria: indigo/violeta --- */
+  --color-brand-50: #161a35;
+  --color-brand-100: #1e2247;
+  --color-brand-200: #2c2f63;
+  --color-brand-300: #3f3f89;
+  --color-brand-400: #7c7ff3;
+  --color-brand-500: #818cf8;
+  --color-brand-600: #6366f1;
+  --color-brand-700: #a5b4fc;
+  --color-brand-800: #c7d2fe;
+  --color-brand-900: #e0e7ff;
+  --color-brand-950: #0e1330;
 
-  /* --- Neutros quentes: o cinza-ardosia ganha tom de areia. Todos os
-       `slate-*` existentes passam a ser quentes sem mudar uma classe. --- */
-  --color-slate-50: oklch(0.982 0.008 88);
-  --color-slate-100: oklch(0.963 0.009 86);
-  --color-slate-200: oklch(0.932 0.011 84);
-  --color-slate-300: oklch(0.883 0.013 82);
-  --color-slate-400: oklch(0.783 0.014 79);
-  --color-slate-500: oklch(0.676 0.015 76);
-  --color-slate-600: oklch(0.575 0.014 73);
-  --color-slate-700: oklch(0.468 0.013 70);
-  --color-slate-800: oklch(0.386 0.012 68);
-  --color-slate-900: oklch(0.316 0.01 66);
-  --color-slate-950: oklch(0.22 0.008 64);
+  /* --- Acento: magenta/fucsia (usado no degradê e em destaques) --- */
+  --color-clay-50: #2a1233;
+  --color-clay-100: #3a1745;
+  --color-clay-200: #59206b;
+  --color-clay-300: #8b2fa0;
+  --color-clay-400: #d946ef;
+  --color-clay-500: #e879f9;
+  --color-clay-600: #c026d3;
+  --color-clay-700: #f0abfc;
+  --color-clay-800: #f5d0fe;
+  --color-clay-900: #fae8ff;
+
+  /* --- Neutros escuros: a escala `slate` foi invertida para o tema.
+       Numeros baixos = superficies escuras; numeros altos = texto claro. --- */
+  --color-slate-50: #0b0f1c;
+  --color-slate-100: #232c4a;
+  --color-slate-200: #2e3859;
+  --color-slate-300: #3d4870;
+  --color-slate-400: #7b85a8;
+  --color-slate-500: #9aa3c7;
+  --color-slate-600: #b6bcd8;
+  --color-slate-700: #cdd3ee;
+  --color-slate-800: #e0e4f7;
+  --color-slate-900: #f1f3fc;
+  --color-slate-950: #05070f;
+
+  /* Superficie de cartao (substitui `bg-white` no tema escuro). */
+  --color-surface: #141b30;
 
   /* --- Tipografia --- */
   --font-sans:
     'Manrope', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
     sans-serif;
-  --font-display: 'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
+  --font-display:
+    'Manrope', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    sans-serif;
 
-  /* --- Sombras suaves e quentes --- */
-  --shadow-panel: 0 1px 2px oklch(0.3 0.02 70 / 0.05), 0 4px 14px -6px oklch(0.3 0.02 70 / 0.1);
-  --shadow-lift: 0 2px 6px oklch(0.3 0.02 70 / 0.08), 0 18px 40px -18px oklch(0.3 0.02 70 / 0.22);
+  /* --- Sombras para fundo escuro (mais escuras, sem halo claro) --- */
+  --shadow-panel: 0 1px 0 oklch(1 0 0 / 0.03), 0 10px 28px -16px oklch(0 0 0 / 0.75);
+  --shadow-lift: 0 12px 34px -14px oklch(0 0 0 / 0.8);
+  --shadow-glow: 0 14px 34px -14px oklch(0.6 0.22 300 / 0.75);
 
   /* --- Movimento curto e suave --- */
   --animate-fade-in: fade-in 0.22s ease-out;
@@ -96,6 +100,7 @@
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+    color-scheme: dark;
   }
 
   body {
@@ -104,7 +109,7 @@
   }
 
   ::selection {
-    background-color: var(--color-brand-200);
+    background-color: color-mix(in oklch, var(--color-brand-500) 40%, transparent);
   }
 
   button,

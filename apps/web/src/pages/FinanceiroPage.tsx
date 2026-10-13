@@ -1325,11 +1325,11 @@ function CartãoResumo({
 }) {
   const cor =
     tom === 'success'
-      ? 'text-emerald-700'
+      ? 'text-emerald-300'
       : tom === 'danger'
-        ? 'text-rose-700'
+        ? 'text-rose-300'
         : tom === 'warning'
-          ? 'text-amber-700'
+          ? 'text-amber-300'
           : 'text-slate-900';
 
   return (

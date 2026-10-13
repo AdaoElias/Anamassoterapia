@@ -182,6 +182,9 @@ catalogs:
     '@fastify/sensible':
       specifier: 6.0.6
       version: 6.0.6
+    '@fastify/static':
+      specifier: 10.1.5
+      version: 10.1.5
     '@fastify/swagger':
       specifier: 9.9.0
       version: 9.9.0
@@ -397,6 +400,9 @@ importers:
       '@fastify/sensible':
         specifier: 'catalog:'
         version: 6.0.6
+      '@fastify/static':
+        specifier: 'catalog:'
+        version: 10.1.5
       '@fastify/swagger':
         specifier: 'catalog:'
         version: 9.9.0

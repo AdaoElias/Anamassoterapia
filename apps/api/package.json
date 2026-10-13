@@ -19,7 +19,8 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset --force",
-    "db:verify": "tsx scripts/verify-constraints.ts"
+    "db:verify": "tsx scripts/verify-constraints.ts",
+    "provision": "tsx scripts/provision.ts"
   },
   "dependencies": {
     "@fastify/cookie": "catalog:",
@@ -27,6 +28,7 @@
     "@fastify/helmet": "catalog:",
     "@fastify/rate-limit": "catalog:",
     "@fastify/sensible": "catalog:",
+    "@fastify/static": "catalog:",
     "@fastify/swagger": "catalog:",
     "@fastify/swagger-ui": "catalog:",
     "@massoterapia/shared": "workspace:*",

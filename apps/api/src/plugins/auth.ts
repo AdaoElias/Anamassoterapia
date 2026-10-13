@@ -54,10 +54,10 @@ declare module 'fastify' {
     lerSessao: (request: FastifyRequest) => SessaoAutenticada | null;
     emitirAccessToken: (sessao: SessaoAutenticada) => string;
     /**
-     * Cookie do refresh. O `path` muda com o ambiente porque o dev fala com
-     * a API pelo proxy do Vite, em `/api/auth/*`, e producao serve a API na
-     * raiz da propria origem. Cookie com `path` errado simplesmente nunca
-     * volta -- e o sintoma e "refresh so falha no dev".
+     * Cookie do refresh, sempre sob `/api/auth` nos dois ambientes: o dev
+     * fala com a API pelo proxy do Vite em `/api/auth/*` e producao serve a
+     * API (e o SPA) sob `/api`. Cookie com `path` errado simplesmente nunca
+     * volta -- o sintoma e "refresh so falha em um dos ambientes".
      */
     definirCookieRefresh: (reply: FastifyReply, token: string) => void;
     limparCookieRefresh: (reply: FastifyReply) => void;
@@ -70,7 +70,11 @@ declare module 'fastify' {
 
 const ACCESS_TTL_SECONDS = parseTtlToSeconds(env.JWT_ACCESS_TTL);
 const COOKIE_NAME = 'mt_refresh';
-const COOKIE_PATH = env.isProduction ? '/auth' : '/api/auth';
+// O cookie vive sob /api/auth nos dois ambientes: no dev o browser fala com
+// o proxy do Vite em /api/auth/*, e em producao a API serve o SPA sob /api.
+// Cookie com `path` errado simplesmente nunca volta -- e o sintoma classico
+// de "refresh so falha em um dos ambientes".
+const COOKIE_PATH = '/api/auth';
 
 function extrairBearer(request: FastifyRequest): string | null {
   const header = request.headers.authorization;

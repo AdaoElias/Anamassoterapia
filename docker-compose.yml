@@ -1,0 +1,57 @@
+# Ambiente local para testar a imagem de producao (API servindo o SPA) sem
+# depender do Postgres instalado na maquina.
+#
+#   docker compose up --build
+#
+# Depois: http://localhost:3333 (abre o app; a API esta em http://localhost:3333/api).
+#
+# Em producao de verdade nao use este arquivo: os segredos, a URL do banco e
+# o TLS vem do provedor. Os valores abaixo sao apenas de desenvolvimento.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: massoterapia
+      POSTGRES_PASSWORD: massoterapia_dev
+      POSTGRES_DB: massoterapia_dev
+    # Porta do host deslocada (5433) para nao colidir com um Postgres local
+    # ja rodando em 5432. O container fala com o banco por "db:5432".
+    ports:
+      - '5433:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U massoterapia -d massoterapia_dev']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://massoterapia:massoterapia_dev@db:5432/massoterapia_dev?schema=public
+      API_HOST: 0.0.0.0
+      API_PORT: '3333'
+      API_PUBLIC_URL: http://localhost:3333
+      WEB_PUBLIC_URL: http://localhost:3333
+      CORS_ORIGINS: http://localhost:3333
+      # TROQUE em producao. Minimo 32 caracteres e um diferente do outro.
+      JWT_ACCESS_SECRET: dev-apenas-troque-esta-chave-de-acesso-0000000000
+      JWT_REFRESH_SECRET: dev-apenas-troque-esta-chave-de-refresh-111111111
+      # 64 caracteres hexadecimais (32 bytes). Trocar torna anamnese antiga ilegivel.
+      ANAMNESIS_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
+      NOTIFIER_DRIVER: log
+      EMAIL_PROVIDER: log
+      RUN_MIGRATIONS: 'on'
+    ports:
+      - '3333:3333'
+
+volumes:
+  pgdata:

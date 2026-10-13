@@ -202,7 +202,7 @@ function FormularioClinica({ clinica, podeEscrever }: { clinica: Clinic; podeEsc
         />
 
         {salvar.isError ? <CaixaErro mensagem={mensagemDeErro(salvar.error)} /> : null}
-        {salvar.isSuccess ? <p className="text-sm text-emerald-700">Dados salvos.</p> : null}
+        {salvar.isSuccess ? <p className="text-sm text-emerald-300">Dados salvos.</p> : null}
 
         {podeEscrever ? (
           <div className="flex justify-end border-t border-slate-100 pt-4">

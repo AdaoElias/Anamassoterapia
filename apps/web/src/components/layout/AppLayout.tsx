@@ -11,6 +11,7 @@ import {
   Menu,
   ShieldAlert,
   Sparkles,
+  UserCog,
   Users,
   Wallet,
   Waves,
@@ -29,6 +30,8 @@ interface ItemMenu {
   rotulo: string;
   icone: ComponentType<LucideProps>;
   fim?: boolean;
+  /** Item visivel apenas para ADMIN (a rota tambem e guardada). */
+  somenteAdmin?: boolean;
 }
 
 interface GrupoMenu {
@@ -59,6 +62,7 @@ const GRUPOS: GrupoMenu[] = [
       { to: '/contraindicacoes', rotulo: 'Contraindicacoes', icone: ShieldAlert },
       { to: '/notificacoes', rotulo: 'Notificacoes', icone: Bell },
       { to: '/clinica', rotulo: 'Clinica', icone: Building2 },
+      { to: '/usuarios', rotulo: 'Usuarios', icone: UserCog, somenteAdmin: true },
     ],
   },
 ];
@@ -72,49 +76,52 @@ const ROTULOS_DE_PAPEL: Record<string, string> = {
 function Marca() {
   return (
     <div className="flex items-center gap-3">
-      <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-400 to-clay-500 text-white shadow-lift">
+      <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-clay-400 text-white shadow-glow">
         <Waves size={22} strokeWidth={2.2} />
       </span>
       <div className="min-w-0">
-        <p className="font-display text-lg leading-tight font-semibold tracking-tight text-white">
-          Clínica Wave
-        </p>
-        <p className="truncate text-xs text-brand-200/70">massoterapia & bem-estar</p>
+        <p className="text-lg leading-tight font-bold tracking-tight text-white">Clinica Wave</p>
+        <p className="truncate text-xs text-slate-500">massoterapia & bem-estar</p>
       </div>
     </div>
   );
 }
 
 function Navegacao({ onNavegar }: { onNavegar?: () => void }) {
+  const { estado } = useAuth();
+  const papel = estado.status === 'autenticado' ? estado.perfil.role : null;
+
   return (
     <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-6">
       {GRUPOS.map((grupo) => (
         <div key={grupo.rotulo} className="space-y-1">
-          <p className="px-3 pb-1 text-[11px] font-bold tracking-widest text-brand-200/50 uppercase">
+          <p className="px-3 pb-1 text-[11px] font-bold tracking-widest text-white/35 uppercase">
             {grupo.rotulo}
           </p>
-          {grupo.itens.map((item) => {
-            const Icone = item.icone;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.fim ?? false}
-                onClick={onNavegar}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors',
-                    isActive
-                      ? 'bg-white/10 text-white ring-1 ring-white/10'
-                      : 'text-brand-200/80 hover:bg-white/5 hover:text-white',
-                  )
-                }
-              >
-                <Icone size={18} strokeWidth={2} className="shrink-0" />
-                <span className="truncate">{item.rotulo}</span>
-              </NavLink>
-            );
-          })}
+          {grupo.itens
+            .filter((item) => item.somenteAdmin !== true || papel === 'ADMIN')
+            .map((item) => {
+              const Icone = item.icone;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.fim ?? false}
+                  onClick={onNavegar}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200',
+                      isActive
+                        ? 'bg-gradient-to-r from-brand-600/70 to-clay-500/40 text-white shadow-glow ring-1 ring-inset ring-white/15'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-white',
+                    )
+                  }
+                >
+                  <Icone size={18} strokeWidth={2} className="shrink-0" />
+                  <span className="truncate">{item.rotulo}</span>
+                </NavLink>
+              );
+            })}
         </div>
       ))}
     </nav>
@@ -132,7 +139,7 @@ function RodapeSessao({ onNavegar }: { onNavegar?: () => void }) {
           <Avatar nome={perfil.name} className="size-9 text-xs" />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-white">{perfil.name}</p>
-            <p className="truncate text-xs text-brand-200/60">
+            <p className="truncate text-xs text-slate-500">
               {perfil.clinicName} · {ROTULOS_DE_PAPEL[perfil.role] ?? perfil.role}
             </p>
           </div>
@@ -141,7 +148,7 @@ function RodapeSessao({ onNavegar }: { onNavegar?: () => void }) {
       <button
         type="button"
         onClick={() => void sair().then(onNavegar)}
-        className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-brand-200/80 transition-colors hover:bg-white/5 hover:text-white"
+        className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
       >
         <LogOut size={16} />
         Sair
@@ -159,7 +166,7 @@ export function AppLayout() {
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[264px] flex-col bg-brand-950 lg:flex">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(22rem_at_-20%_-10%,oklch(0.45_0.1_150/0.5),transparent_60%),radial-gradient(20rem_at_120%_110%,oklch(0.45_0.11_35/0.35),transparent_60%)]"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(22rem_at_-20%_-10%,oklch(0.55_0.2_280/0.35),transparent_60%),radial-gradient(20rem_at_120%_110%,oklch(0.6_0.24_320/0.28),transparent_60%)]"
         />
         <div className="relative px-5 pt-7 pb-4">
           <Marca />
@@ -169,13 +176,13 @@ export function AppLayout() {
       </aside>
 
       {/* Barra superior do mobile. */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200/80 bg-slate-50/90 px-4 py-3 backdrop-blur lg:hidden">
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-white/10 bg-slate-50/90 px-4 py-3 backdrop-blur lg:hidden">
         <Marca />
         <button
           type="button"
           aria-label="Abrir menu"
           onClick={() => setMenuAberto(true)}
-          className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-panel"
+          className="grid size-10 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-700 shadow-panel"
         >
           <Menu size={20} />
         </button>
@@ -188,7 +195,7 @@ export function AppLayout() {
             type="button"
             aria-label="Fechar menu"
             onClick={() => setMenuAberto(false)}
-            className="absolute inset-0 bg-slate-950/50 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px]"
           />
           <aside className="absolute inset-y-0 left-0 flex w-[280px] flex-col bg-brand-950 shadow-lift">
             <div className="flex items-start justify-between px-5 pt-7 pb-4">
@@ -210,10 +217,10 @@ export function AppLayout() {
 
       {/* Conteudo. */}
       <div className="lg:pl-[264px]">
-        <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <main className="relative mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <div
             aria-hidden="true"
-            className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-64 bg-[radial-gradient(900px_260px_at_50%_-40px,oklch(0.93_0.045_150/0.7),transparent_70%)]"
+            className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-72 bg-[radial-gradient(900px_300px_at_50%_-60px,oklch(0.5_0.18_285/0.22),transparent_70%)]"
           />
           <Outlet />
         </main>

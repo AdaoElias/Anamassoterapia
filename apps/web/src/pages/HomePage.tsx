@@ -220,7 +220,7 @@ export function HomePage() {
                 <Link
                   key={atalho.to}
                   to={atalho.to}
-                  className="group flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white px-3 py-2.5 transition-all hover:border-brand-300 hover:shadow-panel"
+                  className="group flex items-center gap-3 rounded-xl border border-slate-200/80 bg-surface px-3 py-2.5 transition-all hover:border-brand-300 hover:shadow-panel"
                 >
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700 transition-colors group-hover:bg-brand-100">
                     <Icone size={17} />

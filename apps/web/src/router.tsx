@@ -17,7 +17,9 @@ import { NotificacoesPage } from '@/pages/NotificacoesPage';
 import { PortalPage } from '@/pages/PortalPage';
 import { ProfissionaisPage } from '@/pages/ProfissionaisPage';
 import { ProntuarioPage } from '@/pages/ProntuarioPage';
+import { RedefinirSenhaPage } from '@/pages/RedefinirSenhaPage';
 import { TerapiasPage } from '@/pages/TerapiasPage';
+import { UsuariosPage } from '@/pages/UsuariosPage';
 
 function Splash() {
   return (
@@ -40,6 +42,23 @@ function RotaProtegida({ children }: { children: ReactNode }) {
 
   if (estado.status === 'anonimo') {
     return <Navigate to="/login" replace state={{ de: location.pathname }} />;
+  }
+
+  return children;
+}
+
+/**
+ * Guarda de papel sobre `RotaProtegida`. A gestao de usuarios e so de ADMIN:
+ * sem isso, um PROFISSIONAL autenticado abriria a URL na mao e veria (ou
+ * tentaria) acoes que a API recusa com 403.
+ */
+function RotaAdmin({ children }: { children: ReactNode }) {
+  const { estado } = useAuth();
+
+  if (estado.status === 'carregando') return <Splash />;
+
+  if (estado.status !== 'autenticado' || estado.perfil.role !== 'ADMIN') {
+    return <Navigate to="/" replace />;
   }
 
   return children;
@@ -68,9 +87,19 @@ export const router = createBrowserRouter([
       { path: 'financeiro', element: <FinanceiroPage /> },
       { path: 'notificacoes', element: <NotificacoesPage /> },
       { path: 'clinica', element: <ClinicaPage /> },
+      {
+        path: 'usuarios',
+        element: (
+          <RotaAdmin>
+            <UsuariosPage />
+          </RotaAdmin>
+        ),
+      },
     ],
   },
   { path: '/login', element: <LoginPage /> },
+  // Definicao de senha pelo link de convite/redefinicao: publica, sem sessao.
+  { path: '/redefinir-senha', element: <RedefinirSenhaPage /> },
   // Portal publico de agendamento: acessivel sem login, identificado pelo slug.
   { path: '/agendar/:slug', element: <PortalPage /> },
   { path: '/agendar', element: <Navigate to="/" replace /> },

@@ -3,11 +3,11 @@ import type { HTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
 
 const TONE_STYLES = {
-  neutral: 'bg-slate-100 text-slate-600 ring-slate-200',
-  success: 'bg-brand-100 text-brand-800 ring-brand-200',
-  warning: 'bg-clay-100 text-clay-800 ring-clay-300',
-  danger: 'bg-rose-100 text-rose-700 ring-rose-200',
-  brand: 'bg-brand-100 text-brand-800 ring-brand-300',
+  neutral: 'bg-white/5 text-slate-600 ring-white/10',
+  success: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30',
+  warning: 'bg-amber-500/15 text-amber-300 ring-amber-500/30',
+  danger: 'bg-rose-500/15 text-rose-300 ring-rose-500/30',
+  brand: 'bg-brand-500/15 text-brand-800 ring-brand-500/30',
 } as const;
 
 type Tone = keyof typeof TONE_STYLES;
