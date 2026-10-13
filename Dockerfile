@@ -32,8 +32,11 @@ COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/shared/package.json packages/shared/package.json
 
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+# Sem `--mount=type=cache`: o Railway exige que o `id` do cache mount siga o
+# formato `s/<service-id>-...`; um id arbitrario faz o build falhar com
+# "missing the cacheKey prefix". Abrir mao do cache mount mantem o Dockerfile
+# valido em qualquer builder; a camada de install ainda e cacheada pelo Docker.
+RUN pnpm install --frozen-lockfile
 
 # 2) Codigo-fonte. Mudar codigo nao invalida a camada de install acima.
 COPY . .
